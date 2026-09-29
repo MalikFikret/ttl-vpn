@@ -8,10 +8,19 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.VpnService
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import ttlvpn.Ttlvpn
 
 class TtlVpnService : VpnService() {
@@ -25,27 +34,71 @@ class TtlVpnService : VpnService() {
         private const val NOTIFICATION_ID = 1
         private const val MTU = 1500
         private const val TTL = 63
+
+        // Every engine operation (start, stop, revoke, destroy) runs on this one thread,
+        // strictly in submission order. It is process-wide rather than per instance, so a
+        // new service instance's start can never overtake an old instance's final stop.
+        private val engineDispatcher = Executors
+            .newSingleThreadExecutor { Thread(it, "ttlvpn-engine") }
+            .asCoroutineDispatcher()
+
+        // Only read or written on engineDispatcher.
+        private var engineRunning = false
+
+        // Bumped on the main thread by every start, stop and destroy request. A job whose
+        // request is no longer the latest must not publish state or leave the foreground:
+        // the newer request's job runs after it and owns the final outcome.
+        private val latestRequest = AtomicLong()
     }
 
-    private var engineRunning = false
+    private val scope = CoroutineScope(SupervisorJob() + engineDispatcher)
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            stopVpn()
+            enqueueStop(startId)
         } else {
-            startVpn()
+            // Stays synchronous and before any engine work: the foreground-service start
+            // deadline must never depend on IO.
+            startAsForeground()
+            enqueueStart(startId)
         }
         // Don't let the system restart us silently: the user starts the VPN explicitly.
         return START_NOT_STICKY
     }
 
-    private fun startVpn() {
-        if (engineRunning) return
+    private fun isLatest(request: Long) = request == latestRequest.get()
 
-        // Must happen quickly after start, or Android kills the service.
-        startAsForeground()
+    private fun enqueueStart(startId: Int) {
+        val request = latestRequest.incrementAndGet()
+        scope.launch { startVpn(request, startId) }
+    }
 
-        val tun: ParcelFileDescriptor? = try {
+    private fun enqueueStop(startId: Int?) {
+        val request = latestRequest.incrementAndGet()
+        scope.launch {
+            stopEngine()
+            if (isLatest(request)) {
+                VpnStateRepository.update(VpnState.Disconnected)
+                leaveForeground(request, startId)
+            }
+        }
+    }
+
+    // Runs on engineDispatcher. Deliberately has no suspension points: once it begins it
+    // runs to completion, so cancellation can never land between detachFd() and start().
+    private fun startVpn(request: Long, startId: Int) {
+        // A newer request (double tap, Stop, destroy) is queued behind us and takes over.
+        if (!isLatest(request)) return
+
+        if (engineRunning) {
+            VpnStateRepository.update(VpnState.Connected(TTL))
+            return
+        }
+        // Also clears any Error left by a previous attempt.
+        VpnStateRepository.update(VpnState.Connecting)
+
+        val tun: ParcelFileDescriptor = try {
             Builder()
                 .setSession("TTL VPN")
                 .setMtu(MTU)
@@ -63,14 +116,10 @@ class TtlVpnService : VpnService() {
                 // Our own sockets (the engine's) must bypass the VPN to avoid a loop
                 .addDisallowedApplication(packageName)
                 .establish() // Returns null if VPN permission was not granted
+                ?: return fail(request, startId, "VPN permission was not granted")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to build TUN interface", e)
-            null
-        }
-
-        if (tun == null) {
-            stopVpn()
-            return
+            return fail(request, startId, "Could not create the VPN interface: ${e.message}")
         }
 
         // Hand ownership of the fd to the Go engine; it closes it on stop.
@@ -83,10 +132,21 @@ class TtlVpnService : VpnService() {
             Log.e(TAG, "Engine failed to start", e)
             // Engine never took the fd, so we must close it ourselves.
             ParcelFileDescriptor.adoptFd(fd).close()
-            stopVpn()
+            return fail(request, startId, "Engine failed to start: ${e.message}")
         }
+
+        // If superseded, the engine stays up for the newer request's job to handle:
+        // a Stop or destroy stops it, a repeated Start reports Connected.
+        if (isLatest(request)) VpnStateRepository.update(VpnState.Connected(TTL))
     }
 
+    private fun fail(request: Long, startId: Int, message: String) {
+        if (!isLatest(request)) return
+        VpnStateRepository.update(VpnState.Error(message))
+        leaveForeground(request, startId)
+    }
+
+    // Runs on engineDispatcher.
     private fun stopEngine() {
         if (engineRunning) {
             Ttlvpn.stop() // Also closes the TUN fd
@@ -95,20 +155,39 @@ class TtlVpnService : VpnService() {
         }
     }
 
-    private fun stopVpn() {
-        stopEngine()
-        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
-        stopSelf()
+    // Hops to the main thread, where requests are counted, so the isLatest check can't race
+    // with a Start arriving right now; otherwise we could remove that Start's foreground.
+    private fun leaveForeground(request: Long, startId: Int?) {
+        mainHandler.post {
+            if (!isLatest(request)) return@post
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+            // stopSelf(startId) is ignored if a newer start command has arrived since.
+            if (startId != null) stopSelf(startId) else stopSelf()
+        }
     }
 
     // Called when the user starts another VPN or revokes permission.
     override fun onRevoke() {
-        stopVpn()
-        super.onRevoke()
+        enqueueStop(startId = null)
+        super.onRevoke() // Default implementation calls stopSelf()
     }
 
     override fun onDestroy() {
-        stopEngine()
+        // Supersede every queued or in-flight job, so none of them publishes state or
+        // touches this dead service afterwards.
+        latestRequest.incrementAndGet()
+        // Queued jobs that haven't started never run. An in-flight start can't be
+        // interrupted (it doesn't suspend), so it always finishes, fd handoff included.
+        scope.cancel()
+        // The final stop runs outside the cancelled scope, on the same thread, after any
+        // in-flight start, so the engine is never left running and the fd never leaks.
+        CoroutineScope(engineDispatcher).launch {
+            stopEngine()
+            // Keep an Error visible; it's why the service stopped.
+            if (VpnStateRepository.state.value !is VpnState.Error) {
+                VpnStateRepository.update(VpnState.Disconnected)
+            }
+        }
         super.onDestroy()
     }
 

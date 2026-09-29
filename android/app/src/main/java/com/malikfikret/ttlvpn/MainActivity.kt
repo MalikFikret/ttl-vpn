@@ -23,11 +23,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.malikfikret.ttlvpn.ui.theme.TTLVPNTheme
 
 class MainActivity : ComponentActivity() {
@@ -48,8 +50,10 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermissionIfNeeded()
         setContent {
             TTLVPNTheme {
+                val state by VpnStateRepository.state.collectAsStateWithLifecycle()
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     VpnControls(
+                        state = state,
                         onStart = ::onStartClicked,
                         onStop = ::stopVpnService,
                         modifier = Modifier.padding(innerPadding)
@@ -88,7 +92,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun VpnControls(onStart: () -> Unit, onStop: () -> Unit, modifier: Modifier = Modifier) {
+fun VpnControls(
+    state: VpnState,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -97,6 +106,16 @@ fun VpnControls(onStart: () -> Unit, onStop: () -> Unit, modifier: Modifier = Mo
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text("TTL VPN", style = MaterialTheme.typography.headlineMedium)
+        Spacer(Modifier.height(8.dp))
+        // Temporary status line; the full UI comes in Task 2.
+        Text(
+            when (state) {
+                VpnState.Disconnected -> "Disconnected"
+                VpnState.Connecting -> "Connecting…"
+                is VpnState.Connected -> "Connected (TTL ${state.ttl})"
+                is VpnState.Error -> "Error: ${state.message}"
+            }
+        )
         Spacer(Modifier.height(24.dp))
         Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
             Text("Start VPN")
@@ -112,6 +131,6 @@ fun VpnControls(onStart: () -> Unit, onStop: () -> Unit, modifier: Modifier = Mo
 @Composable
 fun VpnControlsPreview() {
     TTLVPNTheme {
-        VpnControls(onStart = {}, onStop = {})
+        VpnControls(state = VpnState.Disconnected, onStart = {}, onStop = {})
     }
 }
