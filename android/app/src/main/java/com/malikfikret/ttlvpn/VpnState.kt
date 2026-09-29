@@ -9,7 +9,13 @@ sealed interface VpnState {
     data object Connecting : VpnState
     // Baselines are this app's UID byte counters when the VPN started, or
     // TrafficStats.UNSUPPORTED (-1) if the device doesn't report them.
-    data class Connected(val ttl: Int, val rxBaseline: Long, val txBaseline: Long) : VpnState
+    // startedAt is SystemClock.elapsedRealtime(), which is immune to wall-clock changes.
+    data class Connected(
+        val ttl: Int,
+        val rxBaseline: Long,
+        val txBaseline: Long,
+        val startedAt: Long
+    ) : VpnState
     data class Error(val message: String) : VpnState
 }
 

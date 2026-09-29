@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.Process
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -152,7 +153,7 @@ class TtlVpnService : VpnService() {
             ParcelFileDescriptor.adoptFd(fd).close()
             return fail(request, startId, getString(R.string.error_engine_failed, e.describe()))
         }
-        val connected = VpnState.Connected(TTL, rxBaseline, txBaseline)
+        val connected = VpnState.Connected(TTL, rxBaseline, txBaseline, SystemClock.elapsedRealtime())
         session = connected
 
         // If superseded, the engine stays up for the newer request's job to handle:

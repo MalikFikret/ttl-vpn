@@ -16,7 +16,7 @@
     <string name="label_ttl">Outgoing TTL</string>
     <string name="label_downloaded">Downloaded</string>
     <string name="label_uploaded">Uploaded</string>
-    <string name="label_session_usage">Session data usage</string>
+    <string name="label_duration">Duration</string>
     <string name="value_none">—</string>
     <string name="value_unavailable">Unavailable</string>
 
