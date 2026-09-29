@@ -36,6 +36,8 @@ android {
 }
 
 dependencies {
+    // Go engine built by gomobile (build it first: see engine/)
+    implementation(files("../../engine/build/ttlvpn.aar"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
