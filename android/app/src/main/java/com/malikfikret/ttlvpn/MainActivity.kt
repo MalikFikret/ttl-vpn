@@ -10,34 +10,24 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.malikfikret.ttlvpn.ui.HomeScreen
 import com.malikfikret.ttlvpn.ui.theme.TTLVPNTheme
 
 class MainActivity : ComponentActivity() {
 
+    // A denied consent dialog never reaches the service, so the Activity shows it itself.
+    // Transient on purpose: it's cleared by the next tap and not worth persisting.
+    private var permissionDenied by mutableStateOf(false)
+
     // Shows the system "allow VPN" dialog, then starts the service if approved.
     private val vpnPermission =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == RESULT_OK) startVpnService()
+            if (result.resultCode == RESULT_OK) startVpnService() else permissionDenied = true
         }
 
     // Android 13+: needed for the "VPN active" notification to be visible.
@@ -50,20 +40,29 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermissionIfNeeded()
         setContent {
             TTLVPNTheme {
-                val state by VpnStateRepository.state.collectAsStateWithLifecycle()
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    VpnControls(
-                        state = state,
-                        onStart = ::onStartClicked,
-                        onStop = ::stopVpnService,
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                val serviceState by VpnStateRepository.state.collectAsStateWithLifecycle()
+                val state = serviceState.let {
+                    if (permissionDenied && (it is VpnState.Disconnected || it is VpnState.Error)) {
+                        VpnState.Error(getString(R.string.error_permission_denied))
+                    } else {
+                        it
+                    }
                 }
+                HomeScreen(state = state, onToggle = { onToggle(state) })
             }
         }
     }
 
+    private fun onToggle(state: VpnState) {
+        when (state) {
+            // Stop also cancels a start in progress; the service handles that race.
+            VpnState.Connecting, is VpnState.Connected -> stopVpnService()
+            VpnState.Disconnected, is VpnState.Error -> onStartClicked()
+        }
+    }
+
     private fun onStartClicked() {
+        permissionDenied = false
         // Returns an Intent if the user hasn't approved this app as a VPN yet; null otherwise.
         val intent = VpnService.prepare(this)
         if (intent != null) vpnPermission.launch(intent) else startVpnService()
@@ -88,49 +87,5 @@ class MainActivity : ComponentActivity() {
         ) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-    }
-}
-
-@Composable
-fun VpnControls(
-    state: VpnState,
-    onStart: () -> Unit,
-    onStop: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("TTL VPN", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(8.dp))
-        // Temporary status line; the full UI comes in Task 2.
-        Text(
-            when (state) {
-                VpnState.Disconnected -> "Disconnected"
-                VpnState.Connecting -> "Connecting…"
-                is VpnState.Connected -> "Connected (TTL ${state.ttl})"
-                is VpnState.Error -> "Error: ${state.message}"
-            }
-        )
-        Spacer(Modifier.height(24.dp))
-        Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
-            Text("Start VPN")
-        }
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) {
-            Text("Stop VPN")
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun VpnControlsPreview() {
-    TTLVPNTheme {
-        VpnControls(state = VpnState.Disconnected, onStart = {}, onStop = {})
     }
 }

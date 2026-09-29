@@ -4,15 +4,20 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.net.TrafficStats
 import android.net.VpnService
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.Process
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
@@ -45,6 +50,10 @@ class TtlVpnService : VpnService() {
         // Only read or written on engineDispatcher.
         private var engineRunning = false
 
+        // The running session, kept so a repeated Start can report it again.
+        // Only read or written on engineDispatcher.
+        private var session: VpnState.Connected? = null
+
         // Bumped on the main thread by every start, stop and destroy request. A job whose
         // request is no longer the latest must not publish state or leave the foreground:
         // the newer request's job runs after it and owns the final outcome.
@@ -53,6 +62,9 @@ class TtlVpnService : VpnService() {
 
     private val scope = CoroutineScope(SupervisorJob() + engineDispatcher)
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    // Set on the main thread by onRevoke, read on the main thread by onDestroy.
+    private var revoked = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
@@ -91,8 +103,8 @@ class TtlVpnService : VpnService() {
         // A newer request (double tap, Stop, destroy) is queued behind us and takes over.
         if (!isLatest(request)) return
 
-        if (engineRunning) {
-            VpnStateRepository.update(VpnState.Connected(TTL))
+        session?.let {
+            VpnStateRepository.update(it)
             return
         }
         // Also clears any Error left by a previous attempt.
@@ -116,11 +128,17 @@ class TtlVpnService : VpnService() {
                 // Our own sockets (the engine's) must bypass the VPN to avoid a loop
                 .addDisallowedApplication(packageName)
                 .establish() // Returns null if VPN permission was not granted
-                ?: return fail(request, startId, "VPN permission was not granted")
+                ?: return fail(request, startId, getString(R.string.error_permission_not_granted))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to build TUN interface", e)
-            return fail(request, startId, "Could not create the VPN interface: ${e.message}")
+            return fail(request, startId, getString(R.string.error_tun_failed, e.describe()))
         }
+
+        // Taken before the engine starts, so the session counts all tunneled traffic.
+        // All of it leaves through this app's own sockets.
+        val uid = Process.myUid()
+        val rxBaseline = TrafficStats.getUidRxBytes(uid)
+        val txBaseline = TrafficStats.getUidTxBytes(uid)
 
         // Hand ownership of the fd to the Go engine; it closes it on stop.
         val fd = tun.detachFd()
@@ -132,13 +150,20 @@ class TtlVpnService : VpnService() {
             Log.e(TAG, "Engine failed to start", e)
             // Engine never took the fd, so we must close it ourselves.
             ParcelFileDescriptor.adoptFd(fd).close()
-            return fail(request, startId, "Engine failed to start: ${e.message}")
+            return fail(request, startId, getString(R.string.error_engine_failed, e.describe()))
         }
+        val connected = VpnState.Connected(TTL, rxBaseline, txBaseline)
+        session = connected
 
         // If superseded, the engine stays up for the newer request's job to handle:
         // a Stop or destroy stops it, a repeated Start reports Connected.
-        if (isLatest(request)) VpnStateRepository.update(VpnState.Connected(TTL))
+        if (isLatest(request)) {
+            VpnStateRepository.update(connected)
+            showConnectedNotification(request)
+        }
     }
+
+    private fun Exception.describe() = message ?: getString(R.string.error_unknown)
 
     private fun fail(request: Long, startId: Int, message: String) {
         if (!isLatest(request)) return
@@ -151,6 +176,7 @@ class TtlVpnService : VpnService() {
         if (engineRunning) {
             Ttlvpn.stop() // Also closes the TUN fd
             engineRunning = false
+            session = null
             Log.i(TAG, "Engine stopped")
         }
     }
@@ -168,6 +194,7 @@ class TtlVpnService : VpnService() {
 
     // Called when the user starts another VPN or revokes permission.
     override fun onRevoke() {
+        revoked = true
         enqueueStop(startId = null)
         super.onRevoke() // Default implementation calls stopSelf()
     }
@@ -181,18 +208,24 @@ class TtlVpnService : VpnService() {
         scope.cancel()
         // The final stop runs outside the cancelled scope, on the same thread, after any
         // in-flight start, so the engine is never left running and the fd never leaks.
+        // The revoke message replaces the plain Disconnected that onRevoke's own stop job
+        // would publish; that job is superseded here and usually never runs anyway.
+        val revokedMessage = if (revoked) getString(R.string.error_revoked) else null
         CoroutineScope(engineDispatcher).launch {
             stopEngine()
-            // Keep an Error visible; it's why the service stopped.
-            if (VpnStateRepository.state.value !is VpnState.Error) {
-                VpnStateRepository.update(VpnState.Disconnected)
+            when {
+                revokedMessage != null ->
+                    VpnStateRepository.update(VpnState.Error(revokedMessage))
+                // Keep an Error visible; it's why the service stopped.
+                VpnStateRepository.state.value !is VpnState.Error ->
+                    VpnStateRepository.update(VpnState.Disconnected)
             }
         }
         super.onDestroy()
     }
 
     private fun startAsForeground() {
-        val notification = buildNotification()
+        val notification = buildNotification(getString(R.string.notification_connecting))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             // Android 14+ requires declaring the foreground service type
             startForeground(
@@ -205,10 +238,29 @@ class TtlVpnService : VpnService() {
         }
     }
 
-    private fun buildNotification(): Notification {
+    // Posted on the main thread with the same isLatest check as leaveForeground: after a
+    // Stop has removed the notification, a late update would bring it back as an orphan.
+    private fun showConnectedNotification(request: Long) {
+        val notification = buildNotification(getString(R.string.notification_connected, TTL))
+        mainHandler.post {
+            if (!isLatest(request)) return@post
+            // Android 13+: without the permission the update is dropped anyway; checking
+            // first keeps that explicit (and lint happy).
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+            }
+        }
+    }
+
+    private fun buildNotification(text: String): Notification {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID, "VPN status", NotificationManager.IMPORTANCE_LOW
+                CHANNEL_ID,
+                getString(R.string.notification_channel),
+                NotificationManager.IMPORTANCE_LOW
             )
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
@@ -219,13 +271,30 @@ class TtlVpnService : VpnService() {
             Intent(this, TtlVpnService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE // Required on Android 12+, and safer
         )
+        // Same flags as the launcher, so tapping brings back the existing task instead of
+        // stacking a second MainActivity on top of it.
+        val openAppIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java)
+                .setAction(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_LAUNCHER)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED),
+            PendingIntent.FLAG_IMMUTABLE
+        )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("TTL VPN is active")
-            .setContentText("Outgoing TTL: $TTL")
+            // Small icons must be a monochrome silhouette; the launcher layer is not.
+            .setSmallIcon(R.drawable.ic_power)
+            .setContentTitle(getString(R.string.notification_title))
+            .setContentText(text)
+            .setContentIntent(openAppIntent)
             .setOngoing(true)
-            .addAction(0, "Stop", stopIntent)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            // Android 12+ may otherwise delay showing it by up to 10 seconds.
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .addAction(0, getString(R.string.notification_action_stop), stopIntent)
             .build()
     }
 }

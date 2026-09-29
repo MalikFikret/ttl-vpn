@@ -7,7 +7,9 @@ import kotlinx.coroutines.flow.asStateFlow
 sealed interface VpnState {
     data object Disconnected : VpnState
     data object Connecting : VpnState
-    data class Connected(val ttl: Int) : VpnState
+    // Baselines are this app's UID byte counters when the VPN started, or
+    // TrafficStats.UNSUPPORTED (-1) if the device doesn't report them.
+    data class Connected(val ttl: Int, val rxBaseline: Long, val txBaseline: Long) : VpnState
     data class Error(val message: String) : VpnState
 }
 

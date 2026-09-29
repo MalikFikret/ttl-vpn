@@ -1,3 +1,37 @@
 <resources>
     <string name="app_name">TTL VPN</string>
+
+    <!-- Status -->
+    <string name="status_disconnected">Disconnected</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_error">Not connected</string>
+    <string name="hint_tap_to_connect">Tap to connect</string>
+    <string name="hint_tap_to_disconnect">Tap to disconnect</string>
+    <string name="hint_tap_to_cancel">Tap to cancel</string>
+    <string name="action_connect">Connect VPN</string>
+    <string name="action_disconnect">Disconnect VPN</string>
+
+    <!-- Info cards -->
+    <string name="label_ttl">Outgoing TTL</string>
+    <string name="label_downloaded">Downloaded</string>
+    <string name="label_uploaded">Uploaded</string>
+    <string name="label_session_usage">Session data usage</string>
+    <string name="value_none">—</string>
+    <string name="value_unavailable">Unavailable</string>
+
+    <!-- Errors -->
+    <string name="error_permission_denied">VPN permission was denied. Tap to try again.</string>
+    <string name="error_permission_not_granted">VPN permission was not granted.</string>
+    <string name="error_tun_failed">Could not create the VPN interface: %1$s</string>
+    <string name="error_engine_failed">Engine failed to start: %1$s</string>
+    <string name="error_revoked">VPN stopped: another VPN app was turned on, or VPN permission was revoked.</string>
+    <string name="error_unknown">unknown error</string>
+
+    <!-- Notification -->
+    <string name="notification_channel">VPN status</string>
+    <string name="notification_title">TTL VPN</string>
+    <string name="notification_connecting">Connecting…</string>
+    <string name="notification_connected">Connected · outgoing TTL %1$d</string>
+    <string name="notification_action_stop">Stop</string>
 </resources>
