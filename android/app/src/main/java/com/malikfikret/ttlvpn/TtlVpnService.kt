@@ -49,12 +49,15 @@ class TtlVpnService : VpnService() {
             Builder()
                 .setSession("TTL VPN")
                 .setMtu(MTU)
-                // Private addresses for the virtual interface
+                // Private address for the virtual interface
                 .addAddress("10.111.0.2", 32)
-                .addAddress("fd00:111::2", 128)
-                // Capture ALL IPv4 and IPv6 traffic, so nothing leaks out with TTL 64
+                // Capture ALL IPv4 traffic, so nothing leaks out with TTL 64
                 .addRoute("0.0.0.0", 0)
-                .addRoute("::", 0)
+                // IPv6 is intentionally not configured (no address, route, DNS server
+                // or allowFamily). Android then blocks all IPv6 traffic, so apps fall
+                // back to IPv4 and nothing leaks with hop limit 64. Advertising IPv6
+                // made apps prefer it, but the engine can't reach IPv6 upstream on an
+                // IPv4-only hotspot and reset those connections.
                 .addDnsServer("1.1.1.1")
                 .addDnsServer("8.8.8.8")
                 // Our own sockets (the engine's) must bypass the VPN to avoid a loop
