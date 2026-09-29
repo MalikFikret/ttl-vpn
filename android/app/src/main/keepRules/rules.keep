@@ -4,6 +4,13 @@
 # For more details, see
 #   https://d.android.com/r/tools/r8/keep-rules
 
+# Minification is currently disabled for release builds. If it is ever enabled,
+# the gomobile-generated classes must be kept: the native Go library looks them
+# up by name through JNI, so R8 renaming or removing them crashes the app when
+# the engine loads. Uncomment:
+#-keep class go.** { *; }
+#-keep class ttlvpn.** { *; }
+
 # If your project uses WebView with JS, uncomment the following
 # and specify the fully qualified class name to the JavaScript interface
 # class:
