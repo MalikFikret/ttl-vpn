@@ -1,4 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="window_background">#FF0E1514</color>
+
+    <!-- Home screen widget: resolved by the launcher with the phone's own
+         light/dark mode, so the widget follows the phone, not the in-app theme -->
+    <color name="widget_surface">#FF182322</color>
+    <color name="widget_outline">#FF3F4947</color>
+    <color name="widget_on_surface">#FFDDE4E3</color>
+    <color name="widget_on_surface_variant">#FFBFC9C7</color>
+    <color name="widget_badge_off">#FF273534</color>
+    <color name="widget_icon_off">#FF82D4D2</color>
+    <color name="widget_badge_connecting">#FF3D3C2D</color>
+    <color name="widget_icon_connecting">#FFFFC266</color>
+    <color name="widget_badge_connected">#FF7DDC8F</color>
+    <color name="widget_icon_connected">#FF00391A</color>
+    <color name="widget_badge_error">#FF93000A</color>
+    <color name="widget_icon_error">#FFFFDAD6</color>
 </resources>

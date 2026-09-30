@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="180dp"
+    android:height="72dp"
+    android:viewportWidth="180"
+    android:viewportHeight="72">
+    <path
+        android:fillColor="@color/widget_surface"
+        android:strokeColor="@color/widget_outline"
+        android:strokeWidth="1"
+        android:pathData="M20.5,0.5h139a20,20 0,0 1,20 20v31a20,20 0,0 1,-20 20h-139a20,20 0,0 1,-20 -20v-31a20,20 0,0 1,20 -20z" />
+    <path
+        android:fillColor="@color/widget_badge_connected"
+        android:pathData="M36,36m-20,0a20,20 0,1 1,40 0a20,20 0,1 1,-40 0" />
+    <path
+        android:strokeColor="@color/widget_icon_connected"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:pathData="M36,26L36,35M30.2,29.2A8.2,8.2 0,1 0,41.8 29.2" />
+    <path
+        android:fillColor="@color/widget_on_surface_variant"
+        android:pathData="M66,24h44a3,3 0,0 1,0 6h-44a3,3 0,0 1,0 -6z" />
+    <path
+        android:fillColor="@color/widget_on_surface"
+        android:pathData="M66,38h80a4,4 0,0 1,0 8h-80a4,4 0,0 1,0 -8z" />
+</vector>

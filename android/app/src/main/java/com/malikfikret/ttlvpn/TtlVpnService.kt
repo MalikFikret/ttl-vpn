@@ -94,6 +94,13 @@ class TtlVpnService : VpnService() {
 
     private fun isLatest(request: Long) = request == latestRequest.get()
 
+    // Every state change goes through here, so placed widgets redraw from the same point
+    // the app and tile observe, even when the app UI isn't open.
+    private fun publish(state: VpnState) {
+        VpnStateRepository.update(state)
+        TtlWidgetProvider.updateAll(applicationContext, state)
+    }
+
     private fun enqueueStart(startId: Int) {
         val request = latestRequest.incrementAndGet()
         scope.launch { startVpn(request, startId) }
@@ -104,7 +111,7 @@ class TtlVpnService : VpnService() {
         scope.launch {
             stopEngine()
             if (isLatest(request)) {
-                VpnStateRepository.update(VpnState.Disconnected)
+                publish(VpnState.Disconnected)
                 leaveForeground(request, startId)
             }
         }
@@ -128,11 +135,11 @@ class TtlVpnService : VpnService() {
         if (!isLatest(request)) return
 
         session?.let {
-            VpnStateRepository.update(it)
+            publish(it)
             return
         }
         // Also clears any Error left by a previous attempt.
-        VpnStateRepository.update(VpnState.Connecting)
+        publish(VpnState.Connecting)
 
         val ttl = readConfiguredTtl()
 
@@ -185,7 +192,7 @@ class TtlVpnService : VpnService() {
         // If superseded, the engine stays up for the newer request's job to handle:
         // a Stop or destroy stops it, a repeated Start reports Connected.
         if (isLatest(request)) {
-            VpnStateRepository.update(connected)
+            publish(connected)
             showConnectedNotification(request, ttl)
         }
     }
@@ -215,7 +222,7 @@ class TtlVpnService : VpnService() {
 
     private fun fail(request: Long, startId: Int, message: String) {
         if (!isLatest(request)) return
-        VpnStateRepository.update(VpnState.Error(message))
+        publish(VpnState.Error(message))
         leaveForeground(request, startId)
     }
 
@@ -263,10 +270,10 @@ class TtlVpnService : VpnService() {
             stopEngine()
             when {
                 revokedMessage != null ->
-                    VpnStateRepository.update(VpnState.Error(revokedMessage))
+                    publish(VpnState.Error(revokedMessage))
                 // Keep an Error visible; it's why the service stopped.
                 VpnStateRepository.state.value !is VpnState.Error ->
-                    VpnStateRepository.update(VpnState.Disconnected)
+                    publish(VpnState.Disconnected)
             }
         }
         super.onDestroy()
