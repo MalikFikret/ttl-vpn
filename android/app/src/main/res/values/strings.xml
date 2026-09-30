@@ -34,4 +34,20 @@
     <string name="notification_connecting">Connecting…</string>
     <string name="notification_connected">Connected · outgoing TTL %1$d</string>
     <string name="notification_action_stop">Stop</string>
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="cd_open_settings">Settings</string>
+    <string name="cd_back">Back</string>
+    <string name="settings_section_ttl">Outgoing TTL</string>
+    <string name="settings_ttl_field_label">TTL (1–255)</string>
+    <string name="settings_ttl_error">Enter a number from 1 to 255</string>
+    <string name="settings_ttl_default_hint">Default: %1$d</string>
+    <string name="settings_ttl_saved">Saved</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_reset">Reset to default (%1$d)</string>
+    <string name="settings_save_failed">Could not save the setting. Try again.</string>
+    <string name="settings_applies_next_connect">Applies on next connect</string>
+    <string name="settings_reconnect_now">Reconnect now</string>
+    <string name="settings_ttl_explanation_title">Why TTL matters</string>
+    <string name="settings_ttl_explanation">Your carrier counts traffic arriving with TTL 63 as hotspot traffic. A wrong value can get your traffic billed to the wrong package, so only change it if you know what your carrier expects.</string>
 </resources>

@@ -1,10 +1,8 @@
 package com.malikfikret.ttlvpn.ui
 
-import android.content.Context
 import android.net.TrafficStats
 import android.os.Process
 import android.os.SystemClock
-import android.provider.Settings
 import android.text.format.Formatter
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.animateColorAsState
@@ -15,7 +13,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -78,7 +75,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.malikfikret.ttlvpn.R
@@ -94,6 +90,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun HomeScreen(
     state: VpnState,
+    configuredTtl: Int?,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
     topBarActions: @Composable RowScope.() -> Unit = {}
@@ -102,6 +99,7 @@ fun HomeScreen(
     HomeContent(
         state = state,
         stats = stats,
+        configuredTtl = configuredTtl,
         reducedMotion = rememberReducedMotion(),
         onToggle = onToggle,
         modifier = modifier,
@@ -119,6 +117,7 @@ data class SessionStats(val downloaded: Long?, val uploaded: Long?, val elapsedM
 fun HomeContent(
     state: VpnState,
     stats: SessionStats?,
+    configuredTtl: Int?,
     reducedMotion: Boolean,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
@@ -173,7 +172,7 @@ fun HomeContent(
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
-                StatsGrid(state = state, stats = stats)
+                StatsGrid(state = state, stats = stats, configuredTtl = configuredTtl)
             }
         }
     }
@@ -416,7 +415,7 @@ private fun StatusPill(look: StatusLook) {
 }
 
 @Composable
-private fun StatsGrid(state: VpnState, stats: SessionStats?) {
+private fun StatsGrid(state: VpnState, stats: SessionStats?, configuredTtl: Int?) {
     val context = LocalContext.current
     val none = stringResource(R.string.value_none)
     val unavailable = stringResource(R.string.value_unavailable)
@@ -433,7 +432,8 @@ private fun StatsGrid(state: VpnState, stats: SessionStats?) {
             StatTile(
                 iconRes = R.drawable.ic_ttl,
                 label = stringResource(R.string.label_ttl),
-                value = connected?.ttl?.toString() ?: none,
+                // The TTL in use while connected; otherwise the one the next connect uses.
+                value = (connected?.ttl ?: configuredTtl)?.toString() ?: none,
                 highlighted = true,
                 modifier = Modifier.weight(1f)
             )
@@ -471,38 +471,12 @@ private fun StatTile(
     highlighted: Boolean = false
 ) {
     val colors = MaterialTheme.colorScheme
-    val dark = colors.background.luminance() < 0.5f
-    val container = when {
-        highlighted -> colors.primaryContainer
-        dark -> colors.surfaceContainer
-        else -> colors.surfaceContainerLowest
-    }
     val accent = if (highlighted) colors.onPrimaryContainer else colors.primary
     val labelColor = if (highlighted) colors.onPrimaryContainer.copy(alpha = 0.8f) else colors.onSurfaceVariant
-    val valueColor = if (highlighted) colors.onPrimaryContainer else colors.onSurface
-    val border = if (highlighted) null else BorderStroke(1.dp, colors.outlineVariant)
 
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = container,
-        border = border,
-        modifier = modifier
-    ) {
+    BrandTile(modifier = modifier, highlighted = highlighted) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(accent.copy(alpha = 0.12f))
-            ) {
-                Icon(
-                    painter = painterResource(iconRes),
-                    contentDescription = null, // The label says the same
-                    tint = accent,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+            IconBadge(iconRes = iconRes, tint = accent)
             Spacer(Modifier.height(14.dp))
             Text(
                 text = label,
@@ -517,7 +491,6 @@ private fun StatTile(
                 text = value,
                 style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
                 fontWeight = FontWeight.SemiBold,
-                color = valueColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -571,26 +544,6 @@ private fun delta(now: Long, baseline: Long): Long {
     return if (now == unsupported || baseline == unsupported) -1 else (now - baseline).coerceAtLeast(0)
 }
 
-// Honors Developer options / Accessibility "Remove animations" (animator scale 0).
-// Re-read on every resume, so changing the setting applies without restarting the app.
-@Composable
-private fun rememberReducedMotion(): Boolean {
-    val context = LocalContext.current
-    var reduced by remember { mutableStateOf(isAnimationDisabled(context)) }
-    LifecycleResumeEffect(context) {
-        reduced = isAnimationDisabled(context)
-        onPauseOrDispose { }
-    }
-    return reduced
-}
-
-private fun isAnimationDisabled(context: Context): Boolean =
-    Settings.Global.getFloat(
-        context.contentResolver,
-        Settings.Global.ANIMATOR_DURATION_SCALE,
-        1f
-    ) == 0f
-
 // Previews: every state in light and dark (@PreviewLightDark renders both).
 
 private val previewStats = SessionStats(
@@ -603,7 +556,7 @@ private val previewStats = SessionStats(
 @Composable
 private fun DisconnectedPreview() {
     TTLVPNTheme {
-        HomeContent(VpnState.Disconnected, stats = null, reducedMotion = true, onToggle = {})
+        HomeContent(VpnState.Disconnected, stats = null, configuredTtl = 63, reducedMotion = true, onToggle = {})
     }
 }
 
@@ -611,7 +564,7 @@ private fun DisconnectedPreview() {
 @Composable
 private fun ConnectingPreview() {
     TTLVPNTheme {
-        HomeContent(VpnState.Connecting, stats = null, reducedMotion = true, onToggle = {})
+        HomeContent(VpnState.Connecting, stats = null, configuredTtl = 63, reducedMotion = true, onToggle = {})
     }
 }
 
@@ -622,6 +575,7 @@ private fun ConnectedPreview() {
         HomeContent(
             VpnState.Connected(ttl = 63, rxBaseline = 0, txBaseline = 0, startedAt = 0),
             stats = previewStats,
+            configuredTtl = 63,
             reducedMotion = true,
             onToggle = {}
         )
@@ -635,6 +589,7 @@ private fun ErrorPreview() {
         HomeContent(
             VpnState.Error("Engine failed to start: invalid ttl: 0"),
             stats = null,
+            configuredTtl = 63,
             reducedMotion = true,
             onToggle = {}
         )
@@ -649,6 +604,7 @@ private fun SmallPhonePreview() {
         HomeContent(
             VpnState.Connected(ttl = 63, rxBaseline = 0, txBaseline = 0, startedAt = 0),
             stats = previewStats,
+            configuredTtl = 63,
             reducedMotion = true,
             onToggle = {}
         )

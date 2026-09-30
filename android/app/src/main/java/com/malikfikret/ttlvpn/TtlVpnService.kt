@@ -26,7 +26,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import ttlvpn.Ttlvpn
 
 class TtlVpnService : VpnService() {
@@ -39,7 +42,7 @@ class TtlVpnService : VpnService() {
         private const val CHANNEL_ID = "vpn_status"
         private const val NOTIFICATION_ID = 1
         private const val MTU = 1500
-        private const val TTL = 63
+        private const val TTL_READ_TIMEOUT_MS = 2_000L
 
         // Every engine operation (start, stop, revoke, destroy) runs on this one thread,
         // strictly in submission order. It is process-wide rather than per instance, so a
@@ -98,8 +101,9 @@ class TtlVpnService : VpnService() {
         }
     }
 
-    // Runs on engineDispatcher. Deliberately has no suspension points: once it begins it
-    // runs to completion, so cancellation can never land between detachFd() and start().
+    // Runs on engineDispatcher. Deliberately has no suspension points (the TTL read blocks
+    // instead): once it begins it runs to completion, so cancellation can never land
+    // between detachFd() and start().
     private fun startVpn(request: Long, startId: Int) {
         // A newer request (double tap, Stop, destroy) is queued behind us and takes over.
         if (!isLatest(request)) return
@@ -110,6 +114,8 @@ class TtlVpnService : VpnService() {
         }
         // Also clears any Error left by a previous attempt.
         VpnStateRepository.update(VpnState.Connecting)
+
+        val ttl = readConfiguredTtl()
 
         val tun: ParcelFileDescriptor = try {
             Builder()
@@ -144,24 +150,46 @@ class TtlVpnService : VpnService() {
         // Hand ownership of the fd to the Go engine; it closes it on stop.
         val fd = tun.detachFd()
         try {
-            Ttlvpn.start(fd.toLong(), MTU.toLong(), TTL.toLong())
+            Ttlvpn.start(fd.toLong(), MTU.toLong(), ttl.toLong())
             engineRunning = true
-            Log.i(TAG, "Engine started (fd=$fd, ttl=$TTL)")
+            Log.i(TAG, "Engine started (fd=$fd, ttl=$ttl)")
         } catch (e: Exception) {
             Log.e(TAG, "Engine failed to start", e)
             // Engine never took the fd, so we must close it ourselves.
             ParcelFileDescriptor.adoptFd(fd).close()
             return fail(request, startId, getString(R.string.error_engine_failed, e.describe()))
         }
-        val connected = VpnState.Connected(TTL, rxBaseline, txBaseline, SystemClock.elapsedRealtime())
+        // Carries the TTL actually in use, even if the setting changes while connected.
+        val connected = VpnState.Connected(ttl, rxBaseline, txBaseline, SystemClock.elapsedRealtime())
         session = connected
 
         // If superseded, the engine stays up for the newer request's job to handle:
         // a Stop or destroy stops it, a repeated Start reports Connected.
         if (isLatest(request)) {
             VpnStateRepository.update(connected)
-            showConnectedNotification(request)
+            showConnectedNotification(request, ttl)
         }
+    }
+
+    // Runs on engineDispatcher, and blocks it on purpose: suspending here would free the
+    // engine thread mid-start and let a queued Stop run in between. DataStore does its IO
+    // on its own threads, so this can't deadlock, and the timeout keeps a hung DataStore
+    // from leaving us stuck in Connecting with Stop unable to run.
+    private fun readConfiguredTtl(): Int {
+        val ttl = try {
+            runBlocking {
+                withTimeoutOrNull(TTL_READ_TIMEOUT_MS) {
+                    TtlSettings.ttl(this@TtlVpnService).first()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read the TTL setting", e)
+            null
+        }
+        if (ttl == null) {
+            Log.w(TAG, "TTL setting unavailable; using default ${TtlSettings.DEFAULT_TTL}")
+        }
+        return ttl ?: TtlSettings.DEFAULT_TTL
     }
 
     private fun Exception.describe() = message ?: getString(R.string.error_unknown)
@@ -241,8 +269,8 @@ class TtlVpnService : VpnService() {
 
     // Posted on the main thread with the same isLatest check as leaveForeground: after a
     // Stop has removed the notification, a late update would bring it back as an orphan.
-    private fun showConnectedNotification(request: Long) {
-        val notification = buildNotification(getString(R.string.notification_connected, TTL))
+    private fun showConnectedNotification(request: Long, ttl: Int) {
+        val notification = buildNotification(getString(R.string.notification_connected, ttl))
         mainHandler.post {
             if (!isLatest(request)) return@post
             // Android 13+: without the permission the update is dropped anyway; checking
