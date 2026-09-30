@@ -179,7 +179,7 @@ class TtlVpnService : VpnService() {
         val ttl = try {
             runBlocking {
                 withTimeoutOrNull(TTL_READ_TIMEOUT_MS) {
-                    TtlSettings.ttl(this@TtlVpnService).first()
+                    AppSettings.ttl(this@TtlVpnService).first()
                 }
             }
         } catch (e: Exception) {
@@ -187,9 +187,9 @@ class TtlVpnService : VpnService() {
             null
         }
         if (ttl == null) {
-            Log.w(TAG, "TTL setting unavailable; using default ${TtlSettings.DEFAULT_TTL}")
+            Log.w(TAG, "TTL setting unavailable; using default ${AppSettings.DEFAULT_TTL}")
         }
-        return ttl ?: TtlSettings.DEFAULT_TTL
+        return ttl ?: AppSettings.DEFAULT_TTL
     }
 
     private fun Exception.describe() = message ?: getString(R.string.error_unknown)

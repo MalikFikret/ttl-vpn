@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
@@ -22,22 +23,27 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
     corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() }
 )
 
-object TtlSettings {
+enum class ThemeMode { System, Light, Dark }
+
+object AppSettings {
     const val DEFAULT_TTL = 63
     val TTL_RANGE = 1..255
 
-    private const val TAG = "TtlSettings"
+    private const val TAG = "AppSettings"
     private val TTL_KEY = intPreferencesKey("ttl")
+    private val THEME_KEY = stringPreferencesKey("theme")
+
+    private fun data(context: Context): Flow<Preferences> =
+        context.applicationContext.settingsDataStore.data.catch { e ->
+            if (e !is IOException) throw e
+            Log.e(TAG, "Failed to read settings; using defaults", e)
+            emit(emptyPreferences())
+        }
 
     // Anything outside the valid range falls back to the default, so a bad stored
     // value can never reach the engine.
     fun ttl(context: Context): Flow<Int> =
-        context.applicationContext.settingsDataStore.data
-            .catch { e ->
-                if (e !is IOException) throw e
-                Log.e(TAG, "Failed to read settings; using defaults", e)
-                emit(emptyPreferences())
-            }
+        data(context)
             .map { prefs -> prefs[TTL_KEY]?.takeIf { it in TTL_RANGE } ?: DEFAULT_TTL }
             .distinctUntilChanged()
 
@@ -45,5 +51,18 @@ object TtlSettings {
     suspend fun setTtl(context: Context, ttl: Int) {
         require(ttl in TTL_RANGE) { "TTL out of range: $ttl" }
         context.applicationContext.settingsDataStore.edit { it[TTL_KEY] = ttl }
+    }
+
+    // Stored by enum name; an unknown name (e.g. from a future version) means System.
+    fun themeMode(context: Context): Flow<ThemeMode> =
+        data(context)
+            .map { prefs ->
+                ThemeMode.entries.firstOrNull { it.name == prefs[THEME_KEY] } ?: ThemeMode.System
+            }
+            .distinctUntilChanged()
+
+    // Throws IOException if the write fails.
+    suspend fun setThemeMode(context: Context, mode: ThemeMode) {
+        context.applicationContext.settingsDataStore.edit { it[THEME_KEY] = mode.name }
     }
 }

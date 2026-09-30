@@ -65,7 +65,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -92,6 +95,7 @@ fun HomeScreen(
     state: VpnState,
     configuredTtl: Int?,
     onToggle: () -> Unit,
+    onTtlClick: () -> Unit,
     modifier: Modifier = Modifier,
     topBarActions: @Composable RowScope.() -> Unit = {}
 ) {
@@ -102,6 +106,7 @@ fun HomeScreen(
         configuredTtl = configuredTtl,
         reducedMotion = rememberReducedMotion(),
         onToggle = onToggle,
+        onTtlClick = onTtlClick,
         modifier = modifier,
         topBarActions = topBarActions
     )
@@ -120,6 +125,7 @@ fun HomeContent(
     configuredTtl: Int?,
     reducedMotion: Boolean,
     onToggle: () -> Unit,
+    onTtlClick: () -> Unit,
     modifier: Modifier = Modifier,
     topBarActions: @Composable RowScope.() -> Unit = {}
 ) {
@@ -172,7 +178,7 @@ fun HomeContent(
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
-                StatsGrid(state = state, stats = stats, configuredTtl = configuredTtl)
+                StatsGrid(state = state, stats = stats, configuredTtl = configuredTtl, onTtlClick = onTtlClick)
             }
         }
     }
@@ -415,7 +421,12 @@ private fun StatusPill(look: StatusLook) {
 }
 
 @Composable
-private fun StatsGrid(state: VpnState, stats: SessionStats?, configuredTtl: Int?) {
+private fun StatsGrid(
+    state: VpnState,
+    stats: SessionStats?,
+    configuredTtl: Int?,
+    onTtlClick: () -> Unit
+) {
     val context = LocalContext.current
     val none = stringResource(R.string.value_none)
     val unavailable = stringResource(R.string.value_unavailable)
@@ -434,7 +445,8 @@ private fun StatsGrid(state: VpnState, stats: SessionStats?, configuredTtl: Int?
                 label = stringResource(R.string.label_ttl),
                 // The TTL in use while connected; otherwise the one the next connect uses.
                 value = (connected?.ttl ?: configuredTtl)?.toString() ?: none,
-                highlighted = true,
+                onClick = onTtlClick,
+                clickLabel = stringResource(R.string.action_change_ttl),
                 modifier = Modifier.weight(1f)
             )
             StatTile(
@@ -461,27 +473,54 @@ private fun StatsGrid(state: VpnState, stats: SessionStats?, configuredTtl: Int?
     }
 }
 
-// The TTL tile is the one tonal (highlighted) tile: it's what the app is about.
+// All tiles share one surface. The TTL tile stands out by function instead: it's
+// tappable, carries an edit icon, and opens Settings.
 @Composable
 private fun StatTile(
     @DrawableRes iconRes: Int,
     label: String,
     value: String,
     modifier: Modifier = Modifier,
-    highlighted: Boolean = false
+    onClick: (() -> Unit)? = null,
+    clickLabel: String? = null
 ) {
     val colors = MaterialTheme.colorScheme
-    val accent = if (highlighted) colors.onPrimaryContainer else colors.primary
-    val labelColor = if (highlighted) colors.onPrimaryContainer.copy(alpha = 0.8f) else colors.onSurfaceVariant
+    val tileModifier = if (onClick != null) {
+        val description = stringResource(R.string.cd_ttl_tile, value)
+        modifier
+            .clip(TileShape)
+            // One focus stop that reads "Outgoing TTL 63, double-tap to change TTL":
+            // the value as the label and the action as the click label, instead of
+            // TalkBack's generic "double-tap to activate".
+            .clearAndSetSemantics {
+                contentDescription = description
+                role = Role.Button
+                onClick(label = clickLabel) { onClick(); true }
+            }
+            .clickable(onClick = onClick)
+    } else {
+        modifier
+    }
 
-    BrandTile(modifier = modifier, highlighted = highlighted) {
+    BrandTile(modifier = tileModifier) {
         Column(modifier = Modifier.padding(16.dp)) {
-            IconBadge(iconRes = iconRes, tint = accent)
+            Row(verticalAlignment = Alignment.Top) {
+                IconBadge(iconRes = iconRes, tint = colors.primary)
+                Spacer(Modifier.weight(1f))
+                if (onClick != null) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_edit),
+                        contentDescription = null, // Covered by the tile's click label
+                        tint = colors.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
             Spacer(Modifier.height(14.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = labelColor,
+                color = colors.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -556,7 +595,7 @@ private val previewStats = SessionStats(
 @Composable
 private fun DisconnectedPreview() {
     TTLVPNTheme {
-        HomeContent(VpnState.Disconnected, stats = null, configuredTtl = 63, reducedMotion = true, onToggle = {})
+        HomeContent(VpnState.Disconnected, stats = null, configuredTtl = 63, reducedMotion = true, onToggle = {}, onTtlClick = {})
     }
 }
 
@@ -564,7 +603,7 @@ private fun DisconnectedPreview() {
 @Composable
 private fun ConnectingPreview() {
     TTLVPNTheme {
-        HomeContent(VpnState.Connecting, stats = null, configuredTtl = 63, reducedMotion = true, onToggle = {})
+        HomeContent(VpnState.Connecting, stats = null, configuredTtl = 63, reducedMotion = true, onToggle = {}, onTtlClick = {})
     }
 }
 
@@ -577,7 +616,8 @@ private fun ConnectedPreview() {
             stats = previewStats,
             configuredTtl = 63,
             reducedMotion = true,
-            onToggle = {}
+            onToggle = {},
+            onTtlClick = {}
         )
     }
 }
@@ -591,7 +631,8 @@ private fun ErrorPreview() {
             stats = null,
             configuredTtl = 63,
             reducedMotion = true,
-            onToggle = {}
+            onToggle = {},
+            onTtlClick = {}
         )
     }
 }
@@ -606,7 +647,8 @@ private fun SmallPhonePreview() {
             stats = previewStats,
             configuredTtl = 63,
             reducedMotion = true,
-            onToggle = {}
+            onToggle = {},
+            onTtlClick = {}
         )
     }
 }

@@ -19,6 +19,8 @@
     <string name="label_duration">Duration</string>
     <string name="value_none">—</string>
     <string name="value_unavailable">Unavailable</string>
+    <string name="cd_ttl_tile">Outgoing TTL %1$s</string>
+    <string name="action_change_ttl">Change TTL</string>
 
     <!-- Errors -->
     <string name="error_permission_denied">VPN permission was denied. Tap to try again.</string>
@@ -50,4 +52,9 @@
     <string name="settings_reconnect_now">Reconnect now</string>
     <string name="settings_ttl_explanation_title">Why TTL matters</string>
     <string name="settings_ttl_explanation">Your carrier counts traffic arriving with TTL 63 as hotspot traffic. A wrong value can get your traffic billed to the wrong package, so only change it if you know what your carrier expects.</string>
+    <!-- Appearance -->
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="theme_system">System default</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
 </resources>

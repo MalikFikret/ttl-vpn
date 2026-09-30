@@ -27,6 +27,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 
+internal val TileShape = RoundedCornerShape(20.dp)
+
 // The card surface shared by both screens: white with an outline in light mode, a tonal
 // teal surface in dark mode, or the primary container when highlighted.
 @Composable
@@ -43,7 +45,7 @@ internal fun BrandTile(
         else -> colors.surfaceContainerLowest
     }
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = TileShape,
         color = container,
         contentColor = if (highlighted) colors.onPrimaryContainer else colors.onSurface,
         border = if (highlighted) null else BorderStroke(1.dp, colors.outlineVariant),
