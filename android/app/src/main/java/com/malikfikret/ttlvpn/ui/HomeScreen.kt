@@ -195,7 +195,7 @@ private fun BrandTitle() {
                 .background(MaterialTheme.colorScheme.primary)
         ) {
             Icon(
-                painter = painterResource(R.drawable.ic_shield),
+                painter = painterResource(R.drawable.ic_stamp),
                 contentDescription = null, // Decorative; the app name follows
                 tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(20.dp)

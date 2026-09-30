@@ -357,7 +357,7 @@ private fun PendingChangeTile(onReconnect: () -> Unit) {
 private fun ExplanationTile() {
     BrandTile(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(16.dp)) {
-            IconBadge(iconRes = R.drawable.ic_shield, tint = MaterialTheme.colorScheme.primary)
+            IconBadge(iconRes = R.drawable.ic_stamp, tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(
@@ -383,7 +383,7 @@ private fun AddTileTile(onAddTile: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)
         ) {
-            IconBadge(iconRes = R.drawable.ic_shield, tint = MaterialTheme.colorScheme.primary)
+            IconBadge(iconRes = R.drawable.ic_stamp, tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(12.dp))
             Text(
                 text = stringResource(R.string.settings_add_tile_description),

@@ -139,22 +139,22 @@ private data class WidgetLook(
             when (state) {
                 VpnState.Disconnected -> WidgetLook(
                     R.drawable.widget_badge_off,
-                    R.drawable.ic_widget_power_off,
+                    R.drawable.ic_widget_stamp_off,
                     context.getString(R.string.widget_state_off)
                 )
                 VpnState.Connecting -> WidgetLook(
                     R.drawable.widget_badge_connecting,
-                    R.drawable.ic_widget_power_connecting,
+                    R.drawable.ic_widget_stamp_connecting,
                     context.getString(R.string.widget_state_connecting)
                 )
                 is VpnState.Connected -> WidgetLook(
                     R.drawable.widget_badge_connected,
-                    R.drawable.ic_widget_power_connected,
+                    R.drawable.ic_widget_stamp_connected,
                     context.getString(R.string.widget_state_connected, state.ttl)
                 )
                 is VpnState.Error -> WidgetLook(
                     R.drawable.widget_badge_error,
-                    R.drawable.ic_widget_power_error,
+                    R.drawable.ic_widget_stamp_error,
                     context.getString(R.string.widget_state_error)
                 )
             }

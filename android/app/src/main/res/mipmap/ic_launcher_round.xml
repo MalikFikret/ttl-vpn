@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Round launcher icon for Android 7.x (before adaptive icons). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="80"
+    android:viewportHeight="80">
+    <group android:translateX="-14" android:translateY="-14"><clip-path android:pathData="M18,54a36,36 0,1 0,72,0a36,36 0,1 0,-72,0" /><path android:pathData="M0,0h108v108h-108z"><aapt:attr name="android:fillColor">
+            <gradient android:centerX="54" android:centerY="30" android:gradientRadius="90" android:type="radial">
+                <item android:color="#FF0E8581" android:offset="0" />
+                <item android:color="#FF00504F" android:offset="1" />
+            </gradient>
+        </aapt:attr></path><path android:pathData="M12.0,54a2.5,2.5 0,1 0,5.0,0a2.5,2.5 0,1 0,-5.0,0" android:fillColor="#FFFFFFFF" android:fillAlpha="0.3" /><path android:pathData="M18.5,54a2.5,2.5 0,1 0,5.0,0a2.5,2.5 0,1 0,-5.0,0" android:fillColor="#FFFFFFFF" android:fillAlpha="0.45" /><path android:pathData="M25.0,54a2.5,2.5 0,1 0,5.0,0a2.5,2.5 0,1 0,-5.0,0" android:fillColor="#FFFFFFFF" android:fillAlpha="0.65" /><path android:pathData="M79.03,54H104" android:strokeColor="#FF7DE8DC" android:strokeWidth="5" android:strokeLineCap="round" android:strokeLineJoin="round" /><group android:translateX="16.200" android:translateY="16.200" android:scaleX="0.7000" android:scaleY="0.7000"><group android:rotation="-6" android:pivotX="54" android:pivotY="54"><path android:pathData="M25.5,54a28.5,28.5 0,1 0,57.0,0a28.5,28.5 0,1 0,-57.0,0" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round" /><path android:pathData="M30.8,54a23.2,23.2 0,1 0,46.4,0a23.2,23.2 0,1 0,-46.4,0" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" /><group android:translateX="39.095" android:translateY="42.725" android:scaleX="1.1000" android:scaleY="1.1000"><path android:pathData="M10.5,1.5C5,1.5 1,6.5 1,14M1,14a5.5,5.5 0,1 0,11 0a5.5,5.5 0,1 0,-11 0" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.0" android:strokeLineCap="round" android:strokeLineJoin="round" /></group><group android:translateX="55.155" android:translateY="42.725" android:scaleX="1.1000" android:scaleY="1.1000"><path android:pathData="M1.5,3C3,1.5 4.8,1 6.5,1C9.5,1 11,3 11,5.4C11,8 9,9.8 6,9.8M6,9.8C9.5,9.8 11.5,12 11.5,14.6C11.5,17.6 9,19.5 6.2,19.5C4,19.5 2.2,18.7 1,17.2" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.0" android:strokeLineCap="round" android:strokeLineJoin="round" /></group></group></group></group>
+</vector>

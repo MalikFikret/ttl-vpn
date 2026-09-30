@@ -26,7 +26,7 @@ class TtlTileService : TileService() {
             context.getSystemService(StatusBarManager::class.java).requestAddTileService(
                 ComponentName(context, TtlTileService::class.java),
                 context.getString(R.string.tile_label),
-                Icon.createWithResource(context, R.drawable.ic_shield),
+                Icon.createWithResource(context, R.drawable.ic_stamp),
                 ContextCompat.getMainExecutor(context)
             ) { result -> onResult(result) }
         }

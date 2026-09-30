@@ -335,7 +335,7 @@ class TtlVpnService : VpnService() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             // Small icons must be a monochrome silhouette; the launcher layer is not.
-            .setSmallIcon(R.drawable.ic_power)
+            .setSmallIcon(R.drawable.ic_stamp)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(text)
             .setContentIntent(openAppIntent)

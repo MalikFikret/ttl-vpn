@@ -20,6 +20,6 @@
             android:layout_height="24dp"
             android:layout_gravity="center"
             android:importantForAccessibility="no"
-            android:src="@drawable/ic_widget_power_off" />
+            android:src="@drawable/ic_widget_stamp_off" />
     </FrameLayout>
 </FrameLayout>
