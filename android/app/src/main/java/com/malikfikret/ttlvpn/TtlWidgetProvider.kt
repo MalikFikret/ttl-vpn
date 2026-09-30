@@ -9,6 +9,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
+import android.text.TextUtils
 import android.util.SizeF
 import android.widget.RemoteViews
 import androidx.annotation.DrawableRes
@@ -51,14 +52,17 @@ class TtlWidgetProvider : AppWidgetProvider() {
         private fun draw(context: Context, manager: AppWidgetManager, appWidgetId: Int, state: VpnState) {
             // One binder call per draw; decides both the tap action and its description.
             val needsConsent = VpnService.prepare(context) != null
+            // Text in the app's chosen language (on Android 7-12 it can differ from this
+            // receiver's resources).
+            val strings = AppLanguages.localized(context)
             val click = clickIntent(context, needsConsent)
             val views = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 // Android 12+ picks the largest layout that fits the current size.
                 RemoteViews(
                     mapOf(
-                        SizeF(40f, 40f) to build(context, R.layout.widget_small, state, needsConsent, click),
+                        SizeF(40f, 40f) to build(context, strings, R.layout.widget_small, state, needsConsent, click),
                         SizeF(WIDE_MIN_WIDTH_DP.toFloat(), 40f) to
-                            build(context, R.layout.widget_wide, state, needsConsent, click)
+                            build(context, strings, R.layout.widget_wide, state, needsConsent, click)
                     )
                 )
             } else {
@@ -70,31 +74,39 @@ class TtlWidgetProvider : AppWidgetProvider() {
                 } else {
                     R.layout.widget_small
                 }
-                build(context, layout, state, needsConsent, click)
+                build(context, strings, layout, state, needsConsent, click)
             }
             manager.updateAppWidget(appWidgetId, views)
         }
 
         private fun build(
             context: Context,
+            strings: Context,
             @LayoutRes layout: Int,
             state: VpnState,
             needsConsent: Boolean,
             click: PendingIntent
         ): RemoteViews {
-            val look = WidgetLook.of(context, state)
+            val look = WidgetLook.of(strings, state)
             return RemoteViews(context.packageName, layout).apply {
+                // The launcher lays the widget out in the phone's direction; follow the
+                // app's language instead, so Arabic text never sits in an LTR layout.
+                setInt(
+                    android.R.id.background,
+                    "setLayoutDirection",
+                    TextUtils.getLayoutDirectionFromLocale(strings.resources.configuration.locales[0])
+                )
                 setInt(R.id.widget_badge, "setBackgroundResource", look.badge)
                 setImageViewResource(R.id.widget_icon, look.icon)
                 if (layout == R.layout.widget_wide) setTextViewText(R.id.widget_label, look.label)
                 setOnClickPendingIntent(android.R.id.background, click)
                 setContentDescription(
                     android.R.id.background,
-                    context.getString(
+                    strings.getString(
                         R.string.widget_content_description,
-                        context.getString(R.string.app_name),
+                        strings.getString(R.string.app_name),
                         look.label,
-                        context.getString(
+                        strings.getString(
                             when {
                                 needsConsent -> R.string.widget_action_open_app
                                 VpnController.isActive(state) -> R.string.widget_action_disconnect
@@ -150,7 +162,7 @@ private data class WidgetLook(
                 is VpnState.Connected -> WidgetLook(
                     R.drawable.widget_badge_connected,
                     R.drawable.ic_widget_stamp_connected,
-                    context.getString(R.string.widget_state_connected, state.ttl)
+                    context.getString(R.string.widget_state_connected, formatTtl(state.ttl))
                 )
                 is VpnState.Error -> WidgetLook(
                     R.drawable.widget_badge_error,

@@ -33,6 +33,14 @@ android {
     buildFeatures {
         compose = true
     }
+    // The in-app language picker needs every language in every install. With language
+    // splits, an App Bundle would only ship the phone's languages, so picking another
+    // one would silently fall back to English. (No effect on plain APK builds.)
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
 }
 
 dependencies {

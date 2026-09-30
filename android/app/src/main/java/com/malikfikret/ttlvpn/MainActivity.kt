@@ -2,11 +2,14 @@ package com.malikfikret.ttlvpn
 
 import android.Manifest
 import android.app.UiModeManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
+import java.io.IOException
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -26,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
@@ -41,6 +45,7 @@ import com.malikfikret.ttlvpn.ui.theme.BackgroundDark
 import com.malikfikret.ttlvpn.ui.theme.BackgroundLight
 import com.malikfikret.ttlvpn.ui.theme.TTLVPNTheme
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -56,6 +61,11 @@ class MainActivity : ComponentActivity() {
     // Android 13+: needed for the "VPN active" notification to be visible.
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    // Android 7-12: apply the in-app language (13+ gets it from the system directly).
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguages.localized(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,6 +94,9 @@ class MainActivity : ComponentActivity() {
                 val configuredTtl by remember { AppSettings.ttl(applicationContext) }
                     .collectAsStateWithLifecycle(initialValue = null)
                 var screen by rememberSaveable { mutableStateOf(Screen.Home) }
+                // Read per activity instance: every language change recreates the activity.
+                val language = remember { AppLanguages.current(this@MainActivity) }
+                val scope = rememberCoroutineScope()
                 BackHandler(enabled = screen == Screen.Settings) { screen = Screen.Home }
 
                 // Start problems that never reach the service (consent denied, start
@@ -148,6 +161,20 @@ class MainActivity : ComponentActivity() {
                             vpnState = serviceState,
                             savedTtl = configuredTtl,
                             themeMode = themeMode ?: ThemeMode.System,
+                            language = language,
+                            onLanguageChange = { choice ->
+                                if (choice != language) {
+                                    scope.launch {
+                                        try {
+                                            AppLanguages.set(this@MainActivity, choice)
+                                            // Android 13+ recreates the activity itself.
+                                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) recreate()
+                                        } catch (e: IOException) {
+                                            Log.e("MainActivity", "Failed to save language", e)
+                                        }
+                                    }
+                                }
+                            },
                             onBack = { screen = Screen.Home },
                             // Plain Stop then Start: the service runs them in order on its
                             // engine thread, so the new TTL is read by the fresh start.

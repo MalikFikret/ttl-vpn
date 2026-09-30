@@ -38,6 +38,7 @@ object AppSettings {
     private val TTL_KEY = intPreferencesKey("ttl")
     private val THEME_KEY = stringPreferencesKey("theme")
     private val QS_TILE_ADDED_KEY = booleanPreferencesKey("qs_tile_added")
+    private val LANGUAGE_KEY = stringPreferencesKey("language")
 
     // For fire-and-forget writes from short-lived components (the tile service can be
     // unbound right after a callback, which would cancel a write in its own scope).
@@ -74,6 +75,20 @@ object AppSettings {
     // Throws IOException if the write fails.
     suspend fun setThemeMode(context: Context, mode: ThemeMode) {
         context.applicationContext.settingsDataStore.edit { it[THEME_KEY] = mode.name }
+    }
+
+    // Android 7-12 only; on 13+ the system's LocaleManager holds the language (see
+    // AppLanguages). Stored by enum name; unknown means System.
+    fun language(context: Context): Flow<AppLanguage> =
+        data(context)
+            .map { prefs ->
+                AppLanguage.entries.firstOrNull { it.name == prefs[LANGUAGE_KEY] } ?: AppLanguage.System
+            }
+            .distinctUntilChanged()
+
+    // Throws IOException if the write fails.
+    suspend fun setLanguage(context: Context, language: AppLanguage) {
+        context.applicationContext.settingsDataStore.edit { it[LANGUAGE_KEY] = language.name }
     }
 
     // Tracked from TileService callbacks, only to hide the "Add to Quick Settings" button.

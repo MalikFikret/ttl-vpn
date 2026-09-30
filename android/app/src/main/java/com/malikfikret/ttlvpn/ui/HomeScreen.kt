@@ -1,9 +1,9 @@
 package com.malikfikret.ttlvpn.ui
 
+import android.content.res.Configuration
 import android.net.TrafficStats
 import android.os.Process
 import android.os.SystemClock
-import android.text.format.Formatter
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -82,6 +82,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.malikfikret.ttlvpn.R
 import com.malikfikret.ttlvpn.VpnState
+import com.malikfikret.ttlvpn.formatDataSize
+import com.malikfikret.ttlvpn.formatDuration
+import com.malikfikret.ttlvpn.formatTtl
 import com.malikfikret.ttlvpn.ui.theme.TTLVPNTheme
 import com.malikfikret.ttlvpn.ui.theme.TtlVpnTheme
 import kotlinx.coroutines.Dispatchers
@@ -435,7 +438,7 @@ private fun StatsGrid(
     fun bytes(value: Long?): String = when {
         connected == null || value == null -> none
         value < 0 -> unavailable
-        else -> Formatter.formatShortFileSize(context, value)
+        else -> formatDataSize(context, value) // Latin digits, also in Arabic
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -444,7 +447,7 @@ private fun StatsGrid(
                 iconRes = R.drawable.ic_ttl,
                 label = stringResource(R.string.label_ttl),
                 // The TTL in use while connected; otherwise the one the next connect uses.
-                value = (connected?.ttl ?: configuredTtl)?.toString() ?: none,
+                value = (connected?.ttl ?: configuredTtl)?.let(::formatTtl) ?: none,
                 onClick = onTtlClick,
                 clickLabel = stringResource(R.string.action_change_ttl),
                 modifier = Modifier.weight(1f)
@@ -534,18 +537,6 @@ private fun StatTile(
                 overflow = TextOverflow.Ellipsis
             )
         }
-    }
-}
-
-private fun formatDuration(millis: Long): String {
-    val totalSeconds = millis / 1000
-    val hours = totalSeconds / 3600
-    val minutes = totalSeconds % 3600 / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        "%d:%02d:%02d".format(hours, minutes, seconds)
-    } else {
-        "%02d:%02d".format(minutes, seconds)
     }
 }
 
@@ -645,6 +636,54 @@ private fun SmallPhonePreview() {
         HomeContent(
             VpnState.Connected(ttl = 63, rxBaseline = 0, txBaseline = 0, startedAt = 0),
             stats = previewStats,
+            configuredTtl = 63,
+            reducedMotion = true,
+            onToggle = {},
+            onTtlClick = {}
+        )
+    }
+}
+
+// Localized previews: right-to-left layout and Latin digits in Arabic, Turkish wording.
+@Preview(name = "Arabic · light", locale = "ar")
+@Preview(name = "Arabic · dark", locale = "ar", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun ConnectedArabicPreview() {
+    TTLVPNTheme {
+        HomeContent(
+            VpnState.Connected(ttl = 63, rxBaseline = 0, txBaseline = 0, startedAt = 0),
+            stats = previewStats,
+            configuredTtl = 63,
+            reducedMotion = true,
+            onToggle = {},
+            onTtlClick = {}
+        )
+    }
+}
+
+@Preview(name = "Turkish · light", locale = "tr")
+@Preview(name = "Turkish · dark", locale = "tr", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun ConnectedTurkishPreview() {
+    TTLVPNTheme {
+        HomeContent(
+            VpnState.Connected(ttl = 63, rxBaseline = 0, txBaseline = 0, startedAt = 0),
+            stats = previewStats,
+            configuredTtl = 63,
+            reducedMotion = true,
+            onToggle = {},
+            onTtlClick = {}
+        )
+    }
+}
+
+@Preview(name = "Arabic · error", locale = "ar")
+@Composable
+private fun ErrorArabicPreview() {
+    TTLVPNTheme {
+        HomeContent(
+            VpnState.Error("VPN permission was denied."),
+            stats = null,
             configuredTtl = 63,
             reducedMotion = true,
             onToggle = {},

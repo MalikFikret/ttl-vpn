@@ -1,6 +1,7 @@
 package com.malikfikret.ttlvpn.ui
 
 import android.app.StatusBarManager
+import android.content.res.Configuration
 import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
@@ -50,17 +51,23 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.malikfikret.ttlvpn.AppLanguage
 import com.malikfikret.ttlvpn.AppSettings
 import com.malikfikret.ttlvpn.R
 import com.malikfikret.ttlvpn.ThemeMode
 import com.malikfikret.ttlvpn.TtlTileService
 import com.malikfikret.ttlvpn.VpnState
+import com.malikfikret.ttlvpn.formatTtl
 import com.malikfikret.ttlvpn.ui.theme.TTLVPNTheme
 import java.io.IOException
 import kotlinx.coroutines.launch
@@ -74,6 +81,8 @@ fun SettingsScreen(
     vpnState: VpnState,
     savedTtl: Int?,
     themeMode: ThemeMode,
+    language: AppLanguage,
+    onLanguageChange: (AppLanguage) -> Unit,
     onBack: () -> Unit,
     onReconnect: () -> Unit,
     modifier: Modifier = Modifier
@@ -147,6 +156,8 @@ fun SettingsScreen(
             }
         },
         snackbarHostState = snackbarHostState,
+        language = language,
+        onLanguageChange = onLanguageChange,
         onBack = onBack,
         onReconnect = onReconnect,
         modifier = modifier
@@ -165,6 +176,8 @@ fun SettingsContent(
     onThemeChange: (ThemeMode) -> Unit,
     showAddTile: Boolean,  // Android 13+ and not added yet
     onAddTile: () -> Unit,
+    language: AppLanguage,
+    onLanguageChange: (AppLanguage) -> Unit,
     onBack: () -> Unit,
     onReconnect: () -> Unit,
     modifier: Modifier = Modifier,
@@ -218,6 +231,10 @@ fun SettingsContent(
             SectionTitle(stringResource(R.string.settings_section_appearance))
             ThemeTile(selected = themeMode, onSelect = onThemeChange)
 
+            Spacer(Modifier.height(8.dp))
+            SectionTitle(stringResource(R.string.settings_section_language))
+            LanguageTile(selected = language, onSelect = onLanguageChange)
+
             if (showAddTile) {
                 Spacer(Modifier.height(8.dp))
                 SectionTitle(stringResource(R.string.settings_section_quick_settings))
@@ -268,8 +285,13 @@ private fun TtlEditorTile(
             OutlinedTextField(
                 value = text,
                 // Digits only, at most 3; the range check happens on the parsed value.
+                // Any script's digits (e.g. Arabic-Indic from an Arabic keyboard) become
+                // Latin, so the field and the stored value always show 0-9.
                 onValueChange = { input ->
-                    val digits = input.filter(Char::isDigit).take(3)
+                    val digits = input
+                        .mapNotNull { c -> Character.digit(c, 10).takeIf { it >= 0 }?.let { '0' + it } }
+                        .take(3)
+                        .joinToString("")
                     // Cursor moves and rejected characters also land here; only a real
                     // text change counts as an edit (and clears "Saved").
                     if (digits != text) {
@@ -291,7 +313,7 @@ private fun TtlEditorTile(
                             saveResult == SaveResult.Saved -> stringResource(R.string.settings_ttl_saved)
                             else -> stringResource(
                                 R.string.settings_ttl_default_hint,
-                                AppSettings.DEFAULT_TTL
+                                formatTtl(AppSettings.DEFAULT_TTL)
                             )
                         },
                         color = if (failed) MaterialTheme.colorScheme.error else Color.Unspecified
@@ -319,7 +341,7 @@ private fun TtlEditorTile(
                         focusManager.clearFocus()
                     }
                 ) {
-                    Text(stringResource(R.string.settings_reset, AppSettings.DEFAULT_TTL))
+                    Text(stringResource(R.string.settings_reset, formatTtl(AppSettings.DEFAULT_TTL)))
                 }
                 Spacer(Modifier.weight(1f))
                 Button(onClick = ::save, enabled = canSave) {
@@ -401,30 +423,56 @@ private fun AddTileTile(onAddTile: () -> Unit) {
 
 @Composable
 private fun ThemeTile(selected: ThemeMode, onSelect: (ThemeMode) -> Unit) {
-    val options = listOf(
-        ThemeMode.System to stringResource(R.string.theme_system),
-        ThemeMode.Light to stringResource(R.string.theme_light),
-        ThemeMode.Dark to stringResource(R.string.theme_dark),
+    RadioTile(
+        options = listOf(
+            ThemeMode.System to AnnotatedString(stringResource(R.string.theme_system)),
+            ThemeMode.Light to AnnotatedString(stringResource(R.string.theme_light)),
+            ThemeMode.Dark to AnnotatedString(stringResource(R.string.theme_dark)),
+        ),
+        selected = selected,
+        onSelect = onSelect
     )
+}
+
+@Composable
+private fun LanguageTile(selected: AppLanguage, onSelect: (AppLanguage) -> Unit) {
+    // Each language is named in itself and tagged with its locale, so TalkBack reads
+    // "العربية" with an Arabic voice even while the app is in English.
+    fun named(text: String, tag: String) =
+        AnnotatedString(text, SpanStyle(localeList = LocaleList(tag)))
+    RadioTile(
+        options = listOf(
+            AppLanguage.System to AnnotatedString(stringResource(R.string.language_system)),
+            AppLanguage.English to named(stringResource(R.string.language_english), "en"),
+            AppLanguage.Turkish to named(stringResource(R.string.language_turkish), "tr"),
+            AppLanguage.Arabic to named(stringResource(R.string.language_arabic), "ar"),
+        ),
+        selected = selected,
+        onSelect = onSelect
+    )
+}
+
+@Composable
+private fun <T> RadioTile(options: List<Pair<T, AnnotatedString>>, selected: T, onSelect: (T) -> Unit) {
     BrandTile(modifier = Modifier.fillMaxWidth()) {
         // selectableGroup + Role.RadioButton: TalkBack announces "selected, 1 of 3".
         Column(modifier = Modifier.selectableGroup().padding(vertical = 8.dp)) {
-            options.forEach { (mode, label) ->
+            options.forEach { (value, label) ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
                         .selectable(
-                            selected = mode == selected,
-                            onClick = { onSelect(mode) },
+                            selected = value == selected,
+                            onClick = { onSelect(value) },
                             role = Role.RadioButton
                         )
                         .padding(horizontal = 16.dp)
                 ) {
                     // onClick = null: the whole row is the touch target and the
                     // semantic node, so the radio doesn't get a separate focus stop.
-                    RadioButton(selected = mode == selected, onClick = null)
+                    RadioButton(selected = value == selected, onClick = null)
                     Spacer(Modifier.width(16.dp))
                     Text(text = label, style = MaterialTheme.typography.bodyLarge)
                 }
@@ -442,6 +490,7 @@ private fun PreviewSettings(
     saveResult: SaveResult = SaveResult.Idle,
     themeMode: ThemeMode = ThemeMode.System,
     showAddTile: Boolean = false,
+    language: AppLanguage = AppLanguage.System,
     initialInput: String? = null
 ) {
     TTLVPNTheme {
@@ -455,6 +504,8 @@ private fun PreviewSettings(
             onThemeChange = {},
             showAddTile = showAddTile,
             onAddTile = {},
+            language = language,
+            onLanguageChange = {},
             onBack = {},
             onReconnect = {},
             initialInput = initialInput
@@ -494,3 +545,16 @@ private fun SettingsThemeDarkSelectedPreview() = PreviewSettings(themeMode = The
 @PreviewLightDark
 @Composable
 private fun SettingsAddTilePreview() = PreviewSettings(showAddTile = true)
+
+// Localized previews: right-to-left layout and Latin digits in Arabic, Turkish wording.
+@Preview(name = "Arabic · light", locale = "ar")
+@Preview(name = "Arabic · dark", locale = "ar", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun SettingsArabicPreview() =
+    PreviewSettings(savedTtl = 70, runningTtl = 63, language = AppLanguage.Arabic)
+
+@Preview(name = "Turkish · light", locale = "tr")
+@Preview(name = "Turkish · dark", locale = "tr", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun SettingsTurkishPreview() =
+    PreviewSettings(savedTtl = 70, runningTtl = 63, language = AppLanguage.Turkish)

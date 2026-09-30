@@ -102,11 +102,13 @@ class TtlTileService : TileService() {
     private fun render(state: VpnState) {
         val tile = qsTile ?: return
         tile.state = if (VpnController.isActive(state)) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+        // The app's chosen language, which on Android 7-12 can differ from this service's.
+        val res = AppLanguages.localized(this)
         val status = when (state) {
-            is VpnState.Connected -> getString(R.string.tile_subtitle_connected, state.ttl)
-            VpnState.Connecting -> getString(R.string.tile_subtitle_connecting)
-            VpnState.Disconnected -> getString(R.string.tile_subtitle_off)
-            is VpnState.Error -> getString(R.string.tile_subtitle_error)
+            is VpnState.Connected -> res.getString(R.string.tile_subtitle_connected, formatTtl(state.ttl))
+            VpnState.Connecting -> res.getString(R.string.tile_subtitle_connecting)
+            VpnState.Disconnected -> res.getString(R.string.tile_subtitle_off)
+            is VpnState.Error -> res.getString(R.string.tile_subtitle_error)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) tile.subtitle = status
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) tile.stateDescription = status
