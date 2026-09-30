@@ -29,6 +29,7 @@
     <string name="error_engine_failed">Engine failed to start: %1$s</string>
     <string name="error_revoked">VPN stopped: another VPN app was turned on, or VPN permission was revoked.</string>
     <string name="error_unknown">unknown error</string>
+    <string name="error_fgs_not_allowed">Couldn\'t start from the background. Open the app to connect.</string>
 
     <!-- Notification -->
     <string name="notification_channel">VPN status</string>
@@ -57,4 +58,17 @@
     <string name="theme_system">System default</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
+    <!-- Quick Settings tile -->
+    <string name="tile_label">TTL VPN</string>
+    <string name="tile_subtitle_connected">Connected · TTL %1$d</string>
+    <string name="tile_subtitle_connecting">Connecting…</string>
+    <string name="tile_subtitle_off">Off</string>
+    <string name="tile_subtitle_error">Not connected</string>
+    <string name="settings_section_quick_settings">Quick Settings</string>
+    <string name="settings_add_tile_description">Turn the VPN on and off from the notification shade.</string>
+    <string name="settings_add_tile">Add tile</string>
+    <string name="tile_add_result_added">Tile added to Quick Settings</string>
+    <string name="tile_add_result_already_added">The tile is already in Quick Settings</string>
+    <string name="tile_add_result_not_added">Tile not added</string>
+    <string name="tile_add_result_error">Couldn\'t add the tile</string>
 </resources>

@@ -2,11 +2,9 @@ package com.malikfikret.ttlvpn
 
 import android.Manifest
 import android.app.UiModeManager
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color
-import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -88,38 +86,41 @@ class MainActivity : ComponentActivity() {
                 var screen by rememberSaveable { mutableStateOf(Screen.Home) }
                 BackHandler(enabled = screen == Screen.Settings) { screen = Screen.Home }
 
-                // A denied consent dialog never reaches the service, so the UI keeps it.
-                // Saveable, so it survives rotation; cleared by the next tap.
-                var permissionDenied by rememberSaveable { mutableStateOf(false) }
+                // Start problems that never reach the service (consent denied, start
+                // refused), shown in place of Disconnected/Error. Saveable, so it survives
+                // rotation; cleared by the next tap.
+                var localError by rememberSaveable { mutableStateOf<String?>(null) }
+                val deniedMessage = stringResource(R.string.error_permission_denied)
+                val refusedMessage = stringResource(R.string.error_fgs_not_allowed)
 
                 // Shows the system "allow VPN" dialog, then starts the service if approved.
                 val vpnPermission = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult()
                 ) { result ->
-                    if (result.resultCode == RESULT_OK) startVpnService() else permissionDenied = true
-                }
-
-                val deniedMessage = stringResource(R.string.error_permission_denied)
-                val state = if (permissionDenied &&
-                    (serviceState is VpnState.Disconnected || serviceState is VpnState.Error)
-                ) {
-                    VpnState.Error(deniedMessage)
-                } else {
-                    serviceState
-                }
-
-                val onToggle = {
-                    when (state) {
-                        // Stop also cancels a start in progress; the service handles that race.
-                        VpnState.Connecting, is VpnState.Connected -> stopVpnService()
-                        VpnState.Disconnected, is VpnState.Error -> {
-                            permissionDenied = false
-                            // Returns an Intent if the user hasn't approved this app as a
-                            // VPN yet; null otherwise.
-                            val consent = VpnService.prepare(this)
-                            if (consent != null) vpnPermission.launch(consent) else startVpnService()
-                        }
+                    if (result.resultCode != RESULT_OK) {
+                        localError = deniedMessage
+                    } else if (VpnController.start(this@MainActivity) == StartResult.NotAllowed) {
+                        // Consent was just granted, so NeedsConsent can't come back here.
+                        localError = refusedMessage
                     }
+                }
+                val handleStart: (StartResult) -> Unit = { result ->
+                    when (result) {
+                        StartResult.Started -> Unit
+                        is StartResult.NeedsConsent -> vpnPermission.launch(result.intent)
+                        // Unlikely with the app in the foreground, but never fail silently.
+                        StartResult.NotAllowed -> localError = refusedMessage
+                    }
+                }
+
+                val state = localError?.takeIf {
+                    serviceState is VpnState.Disconnected || serviceState is VpnState.Error
+                }?.let { VpnState.Error(it) } ?: serviceState
+
+                val onToggle: () -> Unit = {
+                    localError = null
+                    // Stop also cancels a start in progress; the service handles that race.
+                    VpnController.toggle(this@MainActivity)?.let(handleStart)
                 }
 
                 val fadeMillis = if (rememberReducedMotion()) 0 else 220
@@ -151,8 +152,8 @@ class MainActivity : ComponentActivity() {
                             // Plain Stop then Start: the service runs them in order on its
                             // engine thread, so the new TTL is read by the fresh start.
                             onReconnect = {
-                                stopVpnService()
-                                startVpnService()
+                                localError = null
+                                handleStart(VpnController.reconnect(this@MainActivity))
                             }
                         )
                     }
@@ -206,18 +207,6 @@ class MainActivity : ComponentActivity() {
         window.setBackgroundDrawable(
             (if (dark) BackgroundDark else BackgroundLight).toArgb().toDrawable()
         )
-    }
-
-    private fun startVpnService() {
-        val intent = Intent(this, TtlVpnService::class.java)
-            .setAction(TtlVpnService.ACTION_START)
-        ContextCompat.startForegroundService(this, intent)
-    }
-
-    private fun stopVpnService() {
-        val intent = Intent(this, TtlVpnService::class.java)
-            .setAction(TtlVpnService.ACTION_STOP)
-        startService(intent)
     }
 
     private fun requestNotificationPermissionIfNeeded() {

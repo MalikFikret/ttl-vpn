@@ -76,7 +76,16 @@ class TtlVpnService : VpnService() {
         } else {
             // Stays synchronous and before any engine work: the foreground-service start
             // deadline must never depend on IO.
-            startAsForeground()
+            try {
+                startAsForeground()
+            } catch (e: Exception) {
+                // Android 12+ can refuse going foreground when started from the
+                // background (e.g. a tile tap it doesn't exempt). Uncaught, this would
+                // crash the app; report it instead of starting the engine.
+                Log.e(TAG, "startForeground refused", e)
+                enqueueForegroundFailure(startId)
+                return START_NOT_STICKY
+            }
             enqueueStart(startId)
         }
         // Don't let the system restart us silently: the user starts the VPN explicitly.
@@ -98,6 +107,16 @@ class TtlVpnService : VpnService() {
                 VpnStateRepository.update(VpnState.Disconnected)
                 leaveForeground(request, startId)
             }
+        }
+    }
+
+    // Goes through the engine thread like any other request, so it's ordered with them
+    // and supersedes whatever was in flight.
+    private fun enqueueForegroundFailure(startId: Int) {
+        val request = latestRequest.incrementAndGet()
+        scope.launch {
+            stopEngine()
+            fail(request, startId, getString(R.string.error_fgs_not_allowed))
         }
     }
 
@@ -300,15 +319,10 @@ class TtlVpnService : VpnService() {
             Intent(this, TtlVpnService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE // Required on Android 12+, and safer
         )
-        // Same flags as the launcher, so tapping brings back the existing task instead of
-        // stacking a second MainActivity on top of it.
         val openAppIntent = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java)
-                .setAction(Intent.ACTION_MAIN)
-                .addCategory(Intent.CATEGORY_LAUNCHER)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED),
+            VpnController.openAppIntent(this),
             PendingIntent.FLAG_IMMUTABLE
         )
 

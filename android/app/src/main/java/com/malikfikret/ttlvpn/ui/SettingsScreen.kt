@@ -1,5 +1,7 @@
 package com.malikfikret.ttlvpn.ui
 
+import android.app.StatusBarManager
+import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -34,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -50,9 +55,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.malikfikret.ttlvpn.AppSettings
 import com.malikfikret.ttlvpn.R
 import com.malikfikret.ttlvpn.ThemeMode
+import com.malikfikret.ttlvpn.TtlTileService
 import com.malikfikret.ttlvpn.VpnState
 import com.malikfikret.ttlvpn.ui.theme.TTLVPNTheme
 import java.io.IOException
@@ -77,6 +84,15 @@ fun SettingsScreen(
     // Bumped on every edit, so a save that completes after the user has typed again
     // doesn't report "Saved" for a value that's no longer in the field.
     var editGeneration by rememberSaveable { mutableIntStateOf(0) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    // Starts as "added" so the button doesn't flash in before the stored flag loads.
+    val tileAdded by remember { AppSettings.qsTileAdded(context) }
+        .collectAsStateWithLifecycle(initialValue = true)
+    val tileAddedMessage = stringResource(R.string.tile_add_result_added)
+    val tileAlreadyAddedMessage = stringResource(R.string.tile_add_result_already_added)
+    val tileNotAddedMessage = stringResource(R.string.tile_add_result_not_added)
+    val tileErrorMessage = stringResource(R.string.tile_add_result_error)
 
     SettingsContent(
         savedTtl = savedTtl,
@@ -110,6 +126,27 @@ fun SettingsScreen(
                 }
             }
         },
+        showAddTile = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !tileAdded,
+        onAddTile = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                TtlTileService.requestAdd(context) { result ->
+                    // Also covers a tile added before the flag existed, or after clear data.
+                    if (result == StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED ||
+                        result == StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED
+                    ) {
+                        AppSettings.setQsTileAdded(context, true)
+                    }
+                    val message = when (result) {
+                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED -> tileAddedMessage
+                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED -> tileAlreadyAddedMessage
+                        StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED -> tileNotAddedMessage
+                        else -> tileErrorMessage // TILE_ADD_REQUEST_ERROR_* (negative codes)
+                    }
+                    scope.launch { snackbarHostState.showSnackbar(message) }
+                }
+            }
+        },
+        snackbarHostState = snackbarHostState,
         onBack = onBack,
         onReconnect = onReconnect,
         modifier = modifier
@@ -126,14 +163,18 @@ fun SettingsContent(
     onEdited: () -> Unit,
     onSave: (Int) -> Unit,
     onThemeChange: (ThemeMode) -> Unit,
+    showAddTile: Boolean,  // Android 13+ and not added yet
+    onAddTile: () -> Unit,
     onBack: () -> Unit,
     onReconnect: () -> Unit,
     modifier: Modifier = Modifier,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     initialInput: String? = null  // Pre-typed field text, for previews
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -176,6 +217,12 @@ fun SettingsContent(
             Spacer(Modifier.height(8.dp))
             SectionTitle(stringResource(R.string.settings_section_appearance))
             ThemeTile(selected = themeMode, onSelect = onThemeChange)
+
+            if (showAddTile) {
+                Spacer(Modifier.height(8.dp))
+                SectionTitle(stringResource(R.string.settings_section_quick_settings))
+                AddTileTile(onAddTile = onAddTile)
+            }
         }
     }
 }
@@ -330,6 +377,29 @@ private fun ExplanationTile() {
 }
 
 @Composable
+private fun AddTileTile(onAddTile: () -> Unit) {
+    BrandTile(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp)
+        ) {
+            IconBadge(iconRes = R.drawable.ic_shield, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = stringResource(R.string.settings_add_tile_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
+            FilledTonalButton(onClick = onAddTile) {
+                Text(stringResource(R.string.settings_add_tile))
+            }
+        }
+    }
+}
+
+@Composable
 private fun ThemeTile(selected: ThemeMode, onSelect: (ThemeMode) -> Unit) {
     val options = listOf(
         ThemeMode.System to stringResource(R.string.theme_system),
@@ -371,6 +441,7 @@ private fun PreviewSettings(
     runningTtl: Int? = null,
     saveResult: SaveResult = SaveResult.Idle,
     themeMode: ThemeMode = ThemeMode.System,
+    showAddTile: Boolean = false,
     initialInput: String? = null
 ) {
     TTLVPNTheme {
@@ -382,6 +453,8 @@ private fun PreviewSettings(
             onEdited = {},
             onSave = {},
             onThemeChange = {},
+            showAddTile = showAddTile,
+            onAddTile = {},
             onBack = {},
             onReconnect = {},
             initialInput = initialInput
@@ -417,3 +490,7 @@ private fun SettingsThemeLightSelectedPreview() = PreviewSettings(themeMode = Th
 @PreviewLightDark
 @Composable
 private fun SettingsThemeDarkSelectedPreview() = PreviewSettings(themeMode = ThemeMode.Dark)
+
+@PreviewLightDark
+@Composable
+private fun SettingsAddTilePreview() = PreviewSettings(showAddTile = true)
