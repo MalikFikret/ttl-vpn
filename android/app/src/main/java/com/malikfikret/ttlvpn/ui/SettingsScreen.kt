@@ -1,9 +1,16 @@
 package com.malikfikret.ttlvpn.ui
 
 import android.app.StatusBarManager
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.util.Log
+import androidx.core.net.toUri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,6 +38,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -68,12 +76,17 @@ import com.malikfikret.ttlvpn.ThemeMode
 import com.malikfikret.ttlvpn.TtlTileService
 import com.malikfikret.ttlvpn.VpnState
 import com.malikfikret.ttlvpn.formatTtl
+import com.malikfikret.ttlvpn.formatVersion
 import com.malikfikret.ttlvpn.ui.theme.TTLVPNTheme
 import java.io.IOException
 import kotlinx.coroutines.launch
 
 // Outcome of the last TTL save, shown under the field until the next edit.
 enum class SaveResult { Idle, Saved, Failed }
+
+// The developer's GitHub profile (not the repo, which is private). A constant: never
+// built from input, and always https.
+private const val GITHUB_URL = "https://github.com/MalikFikret"
 
 // Stateful entry point: owns saving, then delegates to the stateless SettingsContent.
 @Composable
@@ -83,6 +96,8 @@ fun SettingsScreen(
     themeMode: ThemeMode,
     language: AppLanguage,
     onLanguageChange: (AppLanguage) -> Unit,
+    versionName: String,
+    onOpenLicenses: () -> Unit,
     onBack: () -> Unit,
     onReconnect: () -> Unit,
     modifier: Modifier = Modifier
@@ -102,6 +117,9 @@ fun SettingsScreen(
     val tileAlreadyAddedMessage = stringResource(R.string.tile_add_result_already_added)
     val tileNotAddedMessage = stringResource(R.string.tile_add_result_not_added)
     val tileErrorMessage = stringResource(R.string.tile_add_result_error)
+    val noBrowserMessage = stringResource(R.string.about_no_browser)
+    val copyLinkLabel = stringResource(R.string.about_copy_link)
+    val linkCopiedMessage = stringResource(R.string.about_link_copied)
 
     SettingsContent(
         savedTtl = savedTtl,
@@ -158,6 +176,29 @@ fun SettingsScreen(
         snackbarHostState = snackbarHostState,
         language = language,
         onLanguageChange = onLanguageChange,
+        versionName = versionName,
+        onOpenGitHub = {
+            try {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, GITHUB_URL.toUri()).addCategory(Intent.CATEGORY_BROWSABLE)
+                )
+            } catch (e: ActivityNotFoundException) {
+                // No browser (or it's disabled). Trying and catching needs no <queries>
+                // entry, unlike checking for a handler first (Android 11+ visibility).
+                scope.launch {
+                    val result = snackbarHostState.showSnackbar(noBrowserMessage, actionLabel = copyLinkLabel)
+                    if (result == SnackbarResult.ActionPerformed) {
+                        context.getSystemService(ClipboardManager::class.java)
+                            .setPrimaryClip(ClipData.newRawUri(GITHUB_URL, GITHUB_URL.toUri()))
+                        // Android 13+ confirms clipboard writes itself; avoid a double message.
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                            snackbarHostState.showSnackbar(linkCopiedMessage)
+                        }
+                    }
+                }
+            }
+        },
+        onOpenLicenses = onOpenLicenses,
         onBack = onBack,
         onReconnect = onReconnect,
         modifier = modifier
@@ -178,6 +219,9 @@ fun SettingsContent(
     onAddTile: () -> Unit,
     language: AppLanguage,
     onLanguageChange: (AppLanguage) -> Unit,
+    versionName: String,
+    onOpenGitHub: () -> Unit,
+    onOpenLicenses: () -> Unit,
     onBack: () -> Unit,
     onReconnect: () -> Unit,
     modifier: Modifier = Modifier,
@@ -240,6 +284,10 @@ fun SettingsContent(
                 SectionTitle(stringResource(R.string.settings_section_quick_settings))
                 AddTileTile(onAddTile = onAddTile)
             }
+
+            Spacer(Modifier.height(8.dp))
+            SectionTitle(stringResource(R.string.about_section))
+            AboutTile(versionName, onOpenGitHub, onOpenLicenses)
         }
     }
 }
@@ -399,6 +447,77 @@ private fun ExplanationTile() {
 }
 
 @Composable
+private fun AboutTile(versionName: String, onOpenGitHub: () -> Unit, onOpenLicenses: () -> Unit) {
+    BrandTile(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                IconBadge(iconRes = R.drawable.ic_stamp, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        // From BuildConfig, as an LTR unit like every other number.
+                        text = stringResource(R.string.about_version, formatVersion(versionName)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Text(
+                text = stringResource(R.string.about_developer),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+            AboutLinkRow(
+                label = stringResource(R.string.about_github),
+                value = stringResource(R.string.about_github_url),
+                clickLabel = stringResource(R.string.about_open_in_browser),
+                onClick = onOpenGitHub
+            )
+            AboutLinkRow(
+                label = stringResource(R.string.about_open_source_licenses),
+                value = stringResource(R.string.about_app_license),
+                clickLabel = null,
+                onClick = onOpenLicenses
+            )
+            Text(
+                text = stringResource(R.string.about_copyright),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
+    }
+}
+
+// A full-width, at least 48 dp tall touch target: label on top, value below.
+@Composable
+private fun AboutLinkRow(label: String, value: String, clickLabel: String?, onClick: () -> Unit) {
+    Column(
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(onClickLabel = clickLabel, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(text = label, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
 private fun AddTileTile(onAddTile: () -> Unit) {
     BrandTile(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -506,6 +625,9 @@ private fun PreviewSettings(
             onAddTile = {},
             language = language,
             onLanguageChange = {},
+            versionName = "1.0",
+            onOpenGitHub = {},
+            onOpenLicenses = {},
             onBack = {},
             onReconnect = {},
             initialInput = initialInput
@@ -558,3 +680,33 @@ private fun SettingsArabicPreview() =
 @Composable
 private fun SettingsTurkishPreview() =
     PreviewSettings(savedTtl = 70, runningTtl = 63, language = AppLanguage.Turkish)
+
+// The About section sits at the bottom of a long screen, so it gets its own previews.
+@Composable
+private fun PreviewAbout() {
+    TTLVPNTheme {
+        Column(
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.background)
+                .padding(20.dp)
+        ) {
+            SectionTitle(stringResource(R.string.about_section))
+            Spacer(Modifier.height(12.dp))
+            AboutTile(versionName = "1.0", onOpenGitHub = {}, onOpenLicenses = {})
+        }
+    }
+}
+
+@PreviewLightDark
+@Composable
+private fun AboutPreview() = PreviewAbout()
+
+@Preview(name = "About · Arabic · light", locale = "ar")
+@Preview(name = "About · Arabic · dark", locale = "ar", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun AboutArabicPreview() = PreviewAbout()
+
+@Preview(name = "About · Turkish · light", locale = "tr")
+@Preview(name = "About · Turkish · dark", locale = "tr", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun AboutTurkishPreview() = PreviewAbout()

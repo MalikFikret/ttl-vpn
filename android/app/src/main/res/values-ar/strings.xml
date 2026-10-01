@@ -73,4 +73,20 @@
     <string name="widget_content_description">%1$s، %2$s، %3$s</string>
     <string name="settings_section_language">اللغة</string>
     <string name="language_system">حسب النظام</string>
+    <string name="about_section">حول التطبيق</string>
+    <string name="about_version">الإصدار %1$s</string>
+    <string name="about_developer">تطوير: مالك فكرت</string>
+    <string name="about_open_in_browser">فتح في المتصفح</string>
+    <string name="about_no_browser">لا يوجد تطبيق يمكنه فتح الروابط</string>
+    <string name="about_copy_link">نسخ الرابط</string>
+    <string name="about_link_copied">تم نسخ الرابط</string>
+    <string name="about_app_license">هذا التطبيق برنامج حر مرخّص بموجب GPL-3.0.</string>
+    <string name="about_open_source_licenses">تراخيص المصادر المفتوحة</string>
+    <string name="licenses_intro">تم بناء TTL VPN على مكوّنات المصادر المفتوحة التالية.</string>
+    <string name="licenses_english_note">تُعرض نصوص التراخيص بلغتها الإنجليزية الأصلية.</string>
+    <string name="licenses_section_app">هذا التطبيق</string>
+    <string name="licenses_section_engine">محرّك VPN</string>
+    <string name="licenses_section_android">مكتبات Android</string>
+    <string name="licenses_show">عرض الترخيص</string>
+    <string name="licenses_hide">إخفاء الترخيص</string>
 </resources>

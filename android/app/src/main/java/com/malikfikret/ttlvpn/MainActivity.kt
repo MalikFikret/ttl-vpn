@@ -39,6 +39,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toDrawable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.malikfikret.ttlvpn.ui.HomeScreen
+import com.malikfikret.ttlvpn.ui.LicensesScreen
 import com.malikfikret.ttlvpn.ui.SettingsScreen
 import com.malikfikret.ttlvpn.ui.rememberReducedMotion
 import com.malikfikret.ttlvpn.ui.theme.BackgroundDark
@@ -49,8 +50,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 
-// Two screens don't justify a navigation library; an enum is Bundle-saveable as is.
-private enum class Screen { Home, Settings }
+// Three screens don't justify a navigation library; an enum is Bundle-saveable as is.
+private enum class Screen { Home, Settings, Licenses }
 
 // Same values as enableEdgeToEdge()'s defaults for 3-button navigation bars.
 private val NAV_SCRIM_LIGHT = Color.argb(0xE6, 0xFF, 0xFF, 0xFF)
@@ -97,7 +98,10 @@ class MainActivity : ComponentActivity() {
                 // Read per activity instance: every language change recreates the activity.
                 val language = remember { AppLanguages.current(this@MainActivity) }
                 val scope = rememberCoroutineScope()
-                BackHandler(enabled = screen == Screen.Settings) { screen = Screen.Home }
+                // Licenses -> Settings -> Home, like the top bar's back arrows.
+                BackHandler(enabled = screen != Screen.Home) {
+                    screen = if (screen == Screen.Licenses) Screen.Settings else Screen.Home
+                }
 
                 // Start problems that never reach the service (consent denied, start
                 // refused), shown in place of Disconnected/Error. Saveable, so it survives
@@ -175,6 +179,8 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             },
+                            versionName = BuildConfig.VERSION_NAME,
+                            onOpenLicenses = { screen = Screen.Licenses },
                             onBack = { screen = Screen.Home },
                             // Plain Stop then Start: the service runs them in order on its
                             // engine thread, so the new TTL is read by the fresh start.
@@ -183,6 +189,7 @@ class MainActivity : ComponentActivity() {
                                 handleStart(VpnController.reconnect(this@MainActivity))
                             }
                         )
+                        Screen.Licenses -> LicensesScreen(onBack = { screen = Screen.Settings })
                     }
                 }
             }

@@ -22,6 +22,9 @@ private fun latinDigits(locale: Locale): Locale =
 
 private fun Context.locale(): Locale = resources.configuration.locales[0]
 
+// versionName from the build ("1.0"): already Latin, but needs the LTR isolate too.
+fun formatVersion(versionName: String): String = ltr(versionName)
+
 // Kotlin's Int.toString() is locale-independent, hence always Latin.
 fun formatTtl(ttl: Int): String = ltr(ttl.toString())
 

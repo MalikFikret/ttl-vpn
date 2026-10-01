@@ -73,4 +73,20 @@
     <string name="widget_content_description">%1$s, %2$s, %3$s</string>
     <string name="settings_section_language">Dil</string>
     <string name="language_system">Sistem varsayılanı</string>
+    <string name="about_section">Hakkında</string>
+    <string name="about_version">Sürüm %1$s</string>
+    <string name="about_developer">Geliştiren: Malik Fikret</string>
+    <string name="about_open_in_browser">Tarayıcıda aç</string>
+    <string name="about_no_browser">Bağlantıları açabilecek bir uygulama yok</string>
+    <string name="about_copy_link">Bağlantıyı kopyala</string>
+    <string name="about_link_copied">Bağlantı kopyalandı</string>
+    <string name="about_app_license">Bu uygulama, GPL-3.0 lisansıyla sunulan özgür bir yazılımdır.</string>
+    <string name="about_open_source_licenses">Açık kaynak lisansları</string>
+    <string name="licenses_intro">TTL VPN şu açık kaynak bileşenler üzerine kuruludur.</string>
+    <string name="licenses_english_note">Lisans metinleri özgün İngilizce halleriyle gösterilir.</string>
+    <string name="licenses_section_app">Bu uygulama</string>
+    <string name="licenses_section_engine">VPN motoru</string>
+    <string name="licenses_section_android">Android kütüphaneleri</string>
+    <string name="licenses_show">Lisansı göster</string>
+    <string name="licenses_hide">Lisansı gizle</string>
 </resources>

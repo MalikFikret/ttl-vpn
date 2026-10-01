@@ -32,6 +32,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // BuildConfig.VERSION_NAME for the About section (off by default since AGP 8).
+        buildConfig = true
     }
     // The in-app language picker needs every language in every install. With language
     // splits, an App Bundle would only ship the phone's languages, so picking another
