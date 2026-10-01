@@ -98,7 +98,10 @@ class TtlWidgetProvider : AppWidgetProvider() {
                 )
                 setInt(R.id.widget_badge, "setBackgroundResource", look.badge)
                 setImageViewResource(R.id.widget_icon, look.icon)
-                if (layout == R.layout.widget_wide) setTextViewText(R.id.widget_label, look.label)
+                if (layout == R.layout.widget_wide) {
+                    setTextViewText(R.id.widget_caption, look.caption)
+                    setTextViewText(R.id.widget_label, look.state)
+                }
                 setOnClickPendingIntent(android.R.id.background, click)
                 setContentDescription(
                     android.R.id.background,
@@ -141,34 +144,37 @@ class TtlWidgetProvider : AppWidgetProvider() {
     }
 }
 
+// caption / state: the two lines of the 2x1 layout ("TTL 63" over "Connected"), short so
+// the state fits a 2x1 cell. label: the full state ("Connected · TTL 63") for the
+// screen-reader description, which keeps the TTL.
 private data class WidgetLook(
     @param:DrawableRes val badge: Int,
     @param:DrawableRes val icon: Int,
+    val caption: String,
+    val state: String,
     val label: String
 ) {
     companion object {
-        fun of(context: Context, state: VpnState): WidgetLook =
-            when (state) {
-                VpnState.Disconnected -> WidgetLook(
-                    R.drawable.widget_badge_off,
-                    R.drawable.ic_widget_stamp_off,
-                    context.getString(R.string.widget_state_off)
-                )
-                VpnState.Connecting -> WidgetLook(
-                    R.drawable.widget_badge_connecting,
-                    R.drawable.ic_widget_stamp_connecting,
-                    context.getString(R.string.widget_state_connecting)
-                )
+        fun of(context: Context, state: VpnState): WidgetLook {
+            val appName = context.getString(R.string.app_name)
+            return when (state) {
+                VpnState.Disconnected -> context.getString(R.string.widget_state_off).let {
+                    WidgetLook(R.drawable.widget_badge_off, R.drawable.ic_widget_stamp_off, appName, it, it)
+                }
+                VpnState.Connecting -> context.getString(R.string.widget_state_connecting).let {
+                    WidgetLook(R.drawable.widget_badge_connecting, R.drawable.ic_widget_stamp_connecting, appName, it, it)
+                }
                 is VpnState.Connected -> WidgetLook(
                     R.drawable.widget_badge_connected,
                     R.drawable.ic_widget_stamp_connected,
+                    context.getString(R.string.widget_caption_ttl, formatTtl(state.ttl)),
+                    context.getString(R.string.widget_state_connected_short),
                     context.getString(R.string.widget_state_connected, formatTtl(state.ttl))
                 )
-                is VpnState.Error -> WidgetLook(
-                    R.drawable.widget_badge_error,
-                    R.drawable.ic_widget_stamp_error,
-                    context.getString(R.string.widget_state_error)
-                )
+                is VpnState.Error -> context.getString(R.string.widget_state_error).let {
+                    WidgetLook(R.drawable.widget_badge_error, R.drawable.ic_widget_stamp_error, appName, it, it)
+                }
             }
+        }
     }
 }

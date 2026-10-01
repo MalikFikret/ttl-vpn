@@ -66,6 +66,7 @@
     <string name="widget_state_off">متوقف</string>
     <string name="widget_state_connecting">جارٍ الاتصال…</string>
     <string name="widget_state_connected">متصل · TTL %1$s</string>
+    <string name="widget_state_connected_short">متصل</string>
     <string name="widget_state_error">لم يتم الاتصال</string>
     <string name="widget_action_connect">اضغط للاتصال</string>
     <string name="widget_action_disconnect">اضغط لقطع الاتصال</string>

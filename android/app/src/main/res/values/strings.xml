@@ -84,6 +84,10 @@
     <string name="widget_state_off">Off</string>
     <string name="widget_state_connecting">Connecting…</string>
     <string name="widget_state_connected">Connected · TTL %1$s</string>
+    <!-- 2x1 layout: the state line shows the state alone; the TTL goes in the caption above.
+         widget_state_connected stays the full sentence for the screen-reader description. -->
+    <string name="widget_state_connected_short">Connected</string>
+    <string name="widget_caption_ttl" translatable="false">TTL %1$s</string>
     <string name="widget_state_error">Not connected</string>
     <string name="widget_action_connect">tap to connect</string>
     <string name="widget_action_disconnect">tap to disconnect</string>

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 2x1 and wider: badge + app name + state. Its defaults (the Off state) double as
+<!-- 2x1 and wider: badge + caption (12sp: "TTL 63" while connected, "TTL VPN"
+     otherwise) + state (14sp bold, the state alone). Its defaults (the Off state) double as
      the live picker preview on Android 12+. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@android:id/background"
@@ -35,6 +36,7 @@
         android:orientation="vertical">
 
         <TextView
+            android:id="@+id/widget_caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:ellipsize="end"

@@ -66,6 +66,7 @@
     <string name="widget_state_off">Kapalı</string>
     <string name="widget_state_connecting">Bağlanıyor…</string>
     <string name="widget_state_connected">Bağlı · TTL %1$s</string>
+    <string name="widget_state_connected_short">Bağlı</string>
     <string name="widget_state_error">Bağlı değil</string>
     <string name="widget_action_connect">bağlanmak için dokunun</string>
     <string name="widget_action_disconnect">bağlantıyı kesmek için dokunun</string>

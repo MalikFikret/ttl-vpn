@@ -110,6 +110,12 @@ These are easy to break by accident. Each one exists for a concrete reason.
   never handle the toggle itself, or any app could turn the VPN on or off. When the VPN
   permission is known to be missing, the widget's tap opens the app directly instead, because
   starting an activity from a broadcast receiver is restricted on Android 10+.
+- **Widget text.** Below 100 dp the widget shows only the badge (`widget_small`); from 100 dp
+  the 2×1 layout (`widget_wide`). The 2×1 has a 12 sp caption on top ("TTL 63" while
+  connected, "TTL VPN" otherwise) and the state alone below it in 14 sp bold ("Connected",
+  "Off", "Connecting…", "Not connected"), each on one line. Keeping the TTL out of the state
+  line is what lets the state fit a 2×1 cell; the screen-reader description still says the full
+  "Connected · TTL 63".
 - **Lock screen.** The tile allows turning the VPN on while the phone is locked, but turning it
   off requires unlocking: stopping it silently would bill traffic to the wrong package.
 
