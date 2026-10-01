@@ -119,24 +119,37 @@ Android rejects it as not compatible.
 
 1. **Download** the latest `.apk` from the
    [Releases page](https://github.com/MalikFikret/ttl-vpn/releases).
-2. **Verify it** (recommended): compare the file's SHA-256 checksum with the one published in the
-   release. On Windows, in PowerShell:
+2. **Verify the download** (recommended). Use your file's actual name in the commands below.
+   - **Checksum:** compare the APK's SHA-256 with the one in the release notes. In CMD:
 
-   ```powershell
-   Get-FileHash .\TTL-VPN-1.0.0.apk -Algorithm SHA256
-   ```
+     ```cmd
+     certutil -hashfile TTL-VPN-1.0.0.apk SHA256
+     ```
 
-   (or `certutil -hashfile TTL-VPN-1.0.0.apk SHA256` in CMD; `sha256sum TTL-VPN-1.0.0.apk` on
-   Linux/macOS). Use your file's actual name. If the values differ, don't install it.
+     (or `Get-FileHash .\TTL-VPN-1.0.0.apk -Algorithm SHA256` in PowerShell;
+     `sha256sum TTL-VPN-1.0.0.apk` on Linux/macOS). If the values differ, don't install it.
+   - **Signing certificate** (optional, needs the Android SDK's `apksigner`, in its
+     `build-tools` folder). Every release is signed with the same key, certificate subject
+     `CN=Malik Fikret`. In CMD:
 
-   Every release is signed with the same key. Its signing certificate SHA-256 is:
+     ```cmd
+     apksigner verify --print-certs TTL-VPN-1.0.0.apk
+     ```
 
-   ```
-   SIGNING-CERTIFICATE-SHA-256-PLACEHOLDER
-   ```
+     Compare the `Signer #1 certificate SHA-256 digest` line with:
 
-   With the Android SDK you can check it: `apksigner verify --print-certs TTL-VPN-1.0.0.apk`
-   shows it as `Signer #1 certificate SHA-256 digest`.
+     ```
+     efb692e887aa04579195898f506cdf7ef3536e8d79eb35c7184e43910af4d539
+     ```
+
+     `keytool` shows the same fingerprint as uppercase hex with colons:
+
+     ```
+     EF:B6:92:E8:87:AA:04:57:91:95:89:8F:50:6C:DF:7E:F3:53:6E:8D:79:EB:35:C7:18:4E:43:91:0A:F4:D5:39
+     ```
+
+     **A different certificate fingerprint means the APK was not signed by me. Don't install
+     it.**
 3. **Allow the install:** when you open the APK, Android asks to allow your browser or file
    manager to *install unknown apps*. Allow it for that app only.
 4. **First run:**
@@ -378,8 +391,9 @@ fallback to the debug key. Debug builds don't need any of this.
    the signature with `apksigner` (and fails if the APK is debug-signed), copies the APK to
    `dist\TTL-VPN-<version>.apk`, and prints:
    - **APK SHA-256:** goes in the release notes.
-   - **Signing certificate SHA-256:** the same for every release signed with this key; it goes
-     in [Installing on a phone](#installing-on-a-phone).
+   - **Signing certificate SHA-256:** the same for every release signed with this key. Check
+     that it matches the fingerprint in [Installing on a phone](#installing-on-a-phone); if it
+     doesn't, the wrong keystore was used, so don't publish.
 3. Install it on the phone and test it before publishing: only the release build is shrunk by
    R8, so a missing keep rule shows up only there.
 4. Tag the commit (`git tag v1.0.0`, then push the tag), create a GitHub Release from it, attach
