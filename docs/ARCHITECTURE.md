@@ -11,6 +11,7 @@ are. For what the app does and how to install it, see the [README](../README.md)
 - [Icons](#icons)
 - [Open source licenses](#open-source-licenses)
 - [Building](#building)
+- [Build types and release signing](#build-types-and-release-signing)
 - [Conventions](#conventions)
 
 ## Overview
@@ -23,7 +24,8 @@ TTL VPN has two parts:
   exposes exactly two functions: `Start(fd, mtu, ttl)` and `Stop()`. That API is deliberately
   fixed.
 - **`android/`**: a Kotlin / Jetpack Compose app (`com.malikfikret.ttlvpn`, minSdk 24,
-  targetSdk 37) that consumes the AAR.
+  targetSdk 37) that consumes the AAR. Debug builds use `com.malikfikret.ttlvpn.debug`, so they
+  install next to the release app (see [Build types](#build-types-and-release-signing)).
 
 ## Data flow
 
@@ -126,9 +128,14 @@ These are easy to break by accident. Each one exists for a concrete reason.
   `BIND_QUICK_SETTINGS_TILE`; both permissions are held only by the system.
 - Backups and device-to-device transfers are disabled (`allowBackup="false"` plus data
   extraction rules that exclude everything).
-- If code shrinking (R8) is ever enabled, the gomobile classes (`go.**`, `ttlvpn.**`) must be
-  kept; the native library looks them up by name. The commented rules are in
-  `android/app/src/main/keepRules/rules.keep`.
+- Release builds run R8 (code and resource shrinking, `-dontobfuscate`). The gomobile classes
+  (`go.**`, `ttlvpn.**`) **must stay kept**: the native library finds them by name through JNI,
+  so losing them crashes the engine on load in release builds only. The rules are in
+  `android/app/src/main/keepRules/rules.keep` (the engine AAR ships the same consumer rules).
+- Release signing credentials never live in the repo; see
+  [Build types and release signing](#build-types-and-release-signing).
+- Intent actions are prefixed with `BuildConfig.APPLICATION_ID`, never a hardcoded package
+  name, so debug and release installs never share one.
 
 ## Settings and storage
 
@@ -215,6 +222,7 @@ section covers how the build is wired.
   build.bat           :: Go engine, then the Android debug APK
   build.bat install   :: same, then adb install -r on the connected phone
   build.bat app       :: skip the engine, reuse engine\build\ttlvpn.aar (fails if missing)
+  build.bat release   :: Go engine, then assembleRelease, apksigner verify, copy to dist\
   build.bat help
   ```
 
@@ -223,8 +231,15 @@ section covers how the build is wired.
   doesn't matter and isn't checked); `ANDROID_HOME` (falling back to `ANDROID_SDK_ROOT`); and
   the NDK (`ANDROID_NDK_HOME`, otherwise the alphabetically last folder in
   `%ANDROID_HOME%\ndk`). For `install` it finds adb (SDK `platform-tools` first, then `PATH`)
-  and requires exactly one authorized device, or `ANDROID_SERIAL`, **before** building. Every
-  step checks `errorlevel`, and the script ends by printing the APK path.
+  and requires exactly one authorized device, or `ANDROID_SERIAL`, **before** building. For
+  `release` it checks that `TTLVPN_KEYSTORE_PROPERTIES` or `TTLVPN_KEYSTORE` is defined (never
+  reading the values; Gradle does the real check) and finds `apksigner` in the alphabetically
+  last `build-tools` folder. After `assembleRelease` it runs `apksigner verify --verbose
+  --print-certs`, fails unless it reports `Verifies` or if the certificate is
+  `CN=Android Debug`, copies the APK to `dist\TTL-VPN-<versionName>.apk` (the version is read
+  from the `versionName = "..."` line in `app/build.gradle.kts`), and prints the APK SHA-256
+  (`certutil`) and the signing certificate SHA-256. Every step checks `errorlevel`, and the
+  script ends by printing the APK path.
 - **Editing `build.bat`:** keep it CRLF; call `gradlew.bat` by its full path (cmd may be
   configured not to search the current directory); and keep `( ) & | < >` out of its messages
   and out of any parenthesized block that expands a path, or cmd's parser breaks on paths like
@@ -260,6 +275,35 @@ section covers how the build is wired.
   only compiles for Linux/Android. Check it from CMD with
   `set GOOS=linux&& set GOARCH=arm64&& go build ./...`, then reset with `set GOOS=` and
   `set GOARCH=` (no space before `&&`, or CMD includes it in the value).
+
+## Build types and release signing
+
+- **Debug** (`applicationIdSuffix = ".debug"`, `versionNameSuffix = "-debug"`): its own package,
+  so it installs next to the release app with separate settings. `src/debug/res/values/strings.xml`
+  overrides the system-facing labels (`launcher_label`, `tile_label`, `widget_label`) with
+  "TTL VPN (debug)". The in-app title (`app_name`) is unchanged. The manifest uses
+  `launcher_label` for the application and activity labels; add any new system-facing label to
+  the debug override as well.
+- **Release**: `optimization { enable = true }` (AGP 9's switch for R8 code shrinking plus
+  resource shrinking), with `-dontobfuscate` in `keepRules/rules.keep`. The app is open source,
+  so obfuscation hides nothing, and readable stack traces need no mapping file. Not debuggable
+  (the default).
+- **Release signing** is configured at the top of `app/build.gradle.kts`. Credentials come from
+  either:
+  - `TTLVPN_KEYSTORE`, `TTLVPN_KEYSTORE_PASSWORD`, `TTLVPN_KEY_ALIAS` and optional
+    `TTLVPN_KEY_PASSWORD` (defaults to the store password: PKCS12 uses one), or
+  - a properties file named by `TTLVPN_KEYSTORE_PROPERTIES` (keys `storeFile`, `storePassword`,
+    `keyAlias`, `keyPassword`; a relative `storeFile` is relative to that file). The template is
+    `android/keystore.properties.example`.
+
+  Setting both is an error, and so is a properties file or keystore inside the repository. Any
+  problem is recorded as a message without values or paths. The `checkReleaseSigning` task
+  throws it, and `preReleaseBuild` depends on that task, so every release task fails before
+  doing any work and there is never a fallback to the debug key. Debug builds and `lintDebug`
+  never run the check, so they work without a keystore. `keystore.properties`, `*.jks`,
+  `*.keystore`, `*.p12` and `*.pfx` are gitignored as a safety net.
+- The signing values pass through Gradle's configuration cache, which Gradle stores encrypted
+  under `android/.gradle/`.
 
 ## Conventions
 

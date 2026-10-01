@@ -1,19 +1,20 @@
-# Add project specific R8 rules here.
-# AGP will combine all keep rule files in src/main/keepRules to pass to R8
+# R8 rules for the release build. AGP passes every file in src/main/keepRules to R8.
 #
 # For more details, see
 #   https://d.android.com/r/tools/r8/keep-rules
 
-# Minification is currently disabled for release builds. If it is ever enabled,
-# the gomobile-generated classes must be kept: the native Go library looks them
-# up by name through JNI, so R8 renaming or removing them crashes the app when
-# the engine loads. Uncomment:
-#-keep class go.** { *; }
-#-keep class ttlvpn.** { *; }
+# The app is open source, so obfuscation hides nothing; keeping names makes users'
+# crash logs readable without a mapping file. Shrinking and optimization stay on.
+-dontobfuscate
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# gomobile classes. The native Go library (libgojni.so) finds go.Seq and its callbacks
+# by name through JNI, and Ttlvpn.start/stop are native methods bound by their JNI
+# symbol names. Removing or changing them crashes the engine on load, in release only.
+# The engine AAR ships these same rules as consumer rules; they are repeated here so the
+# release build stays safe even if a future gomobile stops shipping them.
+-keep class go.** { *; }
+-keep class ttlvpn.** { *; }
+
+# Nothing else is needed: the manifest components (activity, application, VPN service,
+# tile service, widget receivers) are kept by rules AAPT2 generates from the manifest, and
+# Compose, DataStore and coroutines ship their own consumer rules.

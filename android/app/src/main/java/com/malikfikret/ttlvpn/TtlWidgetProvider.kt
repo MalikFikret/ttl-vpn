@@ -36,7 +36,7 @@ class TtlWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
-        const val ACTION_TOGGLE = "com.malikfikret.ttlvpn.WIDGET_TOGGLE"
+        const val ACTION_TOGGLE = "${BuildConfig.APPLICATION_ID}.WIDGET_TOGGLE"
 
         // At or above this width (dp) the label fits next to the badge.
         private const val WIDE_MIN_WIDTH_DP = 100

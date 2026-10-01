@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug build only (applicationIdSuffix ".debug"): system-facing labels, so the debug install
+     can be told apart from the release one in the launcher, the VPN dialog, Quick Settings and
+     the widget picker. The in-app title (app_name) stays the same. -->
+<resources>
+    <string name="launcher_label" translatable="false">TTL VPN (debug)</string>
+    <string name="tile_label" translatable="false">TTL VPN (debug)</string>
+    <string name="widget_label" translatable="false">TTL VPN (debug)</string>
+</resources>

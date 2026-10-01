@@ -113,17 +113,30 @@ The software is provided without any warranty; see the [license](#license).
 
 ## Installing on a phone
 
+**Requirements:** Android 7.0 (API 24) or newer, on a 64-bit ARM phone. The APK contains native
+code for `arm64-v8a` only, so it won't install on 32-bit-only (`armeabi-v7a`) or x86 devices;
+Android rejects it as not compatible.
+
 1. **Download** the latest `.apk` from the
    [Releases page](https://github.com/MalikFikret/ttl-vpn/releases).
 2. **Verify it** (recommended): compare the file's SHA-256 checksum with the one published in the
    release. On Windows, in PowerShell:
 
    ```powershell
-   Get-FileHash .\TTL-VPN.apk -Algorithm SHA256
+   Get-FileHash .\TTL-VPN-1.0.0.apk -Algorithm SHA256
    ```
 
-   (or `certutil -hashfile TTL-VPN.apk SHA256` in CMD; `sha256sum TTL-VPN.apk` on Linux/macOS).
-   Use your file's actual name. If the values differ, don't install it.
+   (or `certutil -hashfile TTL-VPN-1.0.0.apk SHA256` in CMD; `sha256sum TTL-VPN-1.0.0.apk` on
+   Linux/macOS). Use your file's actual name. If the values differ, don't install it.
+
+   Every release is signed with the same key. Its signing certificate SHA-256 is:
+
+   ```
+   SIGNING-CERTIFICATE-SHA-256-PLACEHOLDER
+   ```
+
+   With the Android SDK you can check it: `apksigner verify --print-certs TTL-VPN-1.0.0.apk`
+   shows it as `Signer #1 certificate SHA-256 digest`.
 3. **Allow the install:** when you open the APK, Android asks to allow your browser or file
    manager to *install unknown apps*. Allow it for that app only.
 4. **First run:**
@@ -250,6 +263,7 @@ From any directory:
 build.bat           :: build the Go engine, then the debug APK
 build.bat install   :: same, then install it on the USB-connected phone (adb)
 build.bat app       :: skip the engine, reuse engine\build\ttlvpn.aar
+build.bat release   :: signed release APK, see Releasing
 build.bat help
 ```
 
@@ -259,6 +273,10 @@ the phone *before* spending minutes on a build. The APK ends up in
 
 For `install`, enable *USB debugging* on the phone (Developer options) and accept the prompt
 when you connect it. With several devices connected, set `ANDROID_SERIAL` to choose one.
+
+Debug builds install **next to** the release app, not over it: the package is
+`com.malikfikret.ttlvpn.debug`, the version ends in `-debug`, and the launcher, VPN dialog, Quick
+Settings tile and widget picker say **TTL VPN (debug)**. The two keep separate settings.
 
 ### Manual commands
 
@@ -316,16 +334,56 @@ It fails if a newly added Android library isn't listed yet; add it to the table 
 
 ## Releasing
 
-> **To be finalized in Task 8** (release signing). This is the intended process.
+Releases are signed APKs built on Windows with `build.bat release`. They're `arm64-v8a` only and
+need Android 7.0 (API 24) or newer; say so in the release notes.
 
-- The release keystore lives **outside the repo** and is **backed up** (at least two places).
-  Losing it means users can't update: Android refuses an update signed with a different key,
-  so they would have to uninstall first and lose their settings.
-- Build a release APK with `build.bat release` (planned in Task 8, not available yet).
-- Publish: tag the commit (`git tag v1.0` and push the tag), create a GitHub Release from it,
-  attach the APK, and publish its SHA-256 checksum in the release notes.
-- Before releasing: bump `versionCode` and `versionName` in `android/app/build.gradle.kts`, and
-  re-run `tools/update_licenses.py`.
+**One-time: the release keystore**
+
+- Create it **outside the repo** (the build refuses a keystore or properties file inside it).
+  `keytool` comes with the JDK and prompts for the password, so it doesn't end up in your shell
+  history:
+
+  ```cmd
+  "%JAVA_HOME%\bin\keytool" -genkeypair -v -keystore C:\path\outside\repo\ttl-vpn-release.jks -alias ttlvpn -keyalg RSA -keysize 4096 -validity 10000
+  ```
+
+  The keystore is PKCS12 (keytool's default), which uses one password for the store and the key.
+- **Back it up** in at least two places, along with its password. Losing either means users
+  can't update: Android refuses an update signed with a different key, so they would have to
+  uninstall first and lose their settings.
+
+**Telling the build where the key is.** Either way, Gradle reads the values itself: `build.bat`
+never touches them, nothing prints them, and none of them is stored in the repo.
+
+- **Recommended:** copy [`android/keystore.properties.example`](android/keystore.properties.example)
+  **outside the repo** (for example next to the keystore), fill it in, and point
+  `TTLVPN_KEYSTORE_PROPERTIES` at it. `setx` applies to terminals opened afterwards:
+
+  ```cmd
+  setx TTLVPN_KEYSTORE_PROPERTIES C:\path\outside\repo\keystore.properties
+  ```
+
+- **Or** set `TTLVPN_KEYSTORE` (keystore path), `TTLVPN_KEYSTORE_PASSWORD`, `TTLVPN_KEY_ALIAS`
+  and, only if it differs from the store password, `TTLVPN_KEY_PASSWORD`. Don't combine this
+  with `TTLVPN_KEYSTORE_PROPERTIES`; the build stops if both are set.
+
+If anything is missing or wrong, release builds fail with a message saying what. There is no
+fallback to the debug key. Debug builds don't need any of this.
+
+**Each release**
+
+1. Bump `versionCode` (+1) and `versionName` in `android/app/build.gradle.kts`. If any
+   dependency changed, re-run `tools/update_licenses.py`.
+2. Run `build.bat release`. It builds the engine and the release APK (R8 shrinking on), verifies
+   the signature with `apksigner` (and fails if the APK is debug-signed), copies the APK to
+   `dist\TTL-VPN-<version>.apk`, and prints:
+   - **APK SHA-256:** goes in the release notes.
+   - **Signing certificate SHA-256:** the same for every release signed with this key; it goes
+     in [Installing on a phone](#installing-on-a-phone).
+3. Install it on the phone and test it before publishing: only the release build is shrunk by
+   R8, so a missing keep rule shows up only there.
+4. Tag the commit (`git tag v1.0.0`, then push the tag), create a GitHub Release from it, attach
+   the APK, and put its SHA-256 and the requirements in the release notes.
 
 ## Project structure
 
@@ -334,12 +392,16 @@ build.bat                  One-step build (engine + APK), Windows
 LICENSE                    GPL-3.0
 docs/ARCHITECTURE.md       Architecture, invariants and design decisions (the detailed reference)
 docs/screenshots/          README images
+dist/                      Release APKs from build.bat release (gitignored)
 tools/update_licenses.py   Regenerates the in-app open source notices
 engine/                    Go engine (module github.com/MalikFikret/ttl-vpn/engine)
   ttlvpn/ttlvpn.go         Start(fd, mtu, ttl) / Stop() exposed to Android via gomobile
   ttlvpn/ttl_linux.go      Sets IP_TTL / IPV6_UNICAST_HOPS on every outbound socket
   ttlvpn/ttl_others.go     Stub so the package compiles on Windows
+android/keystore.properties.example   Template for the release signing properties
+android/app/build.gradle.kts           Versions, release signing, R8, debug suffix
 android/app/src/main/
+  keepRules/rules.keep     R8 keep rules (gomobile classes, no obfuscation)
   java/com/malikfikret/ttlvpn/
     TtlVpnService.kt       VpnService: TUN setup, engine thread, notification, state
     VpnController.kt       The single on/off path for app, tile and widget

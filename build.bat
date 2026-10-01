@@ -1,8 +1,9 @@
 @echo off
-rem TTL VPN build: Go engine (gomobile) + Android debug APK.
+rem TTL VPN build: Go engine (gomobile) + Android APK.
 rem   build.bat           engine + debug APK
 rem   build.bat install   same, then install it on the connected phone
 rem   build.bat app       skip the engine and reuse engine\build\ttlvpn.aar
+rem   build.bat release   engine + signed release APK, verified, copied to dist\
 rem   build.bat help      show usage
 rem
 rem Paths are resolved from this script's location, so it runs from any directory.
@@ -16,6 +17,8 @@ set "ENGINE=%ROOT%\engine"
 set "ANDROID_DIR=%ROOT%\android"
 set "AAR=%ENGINE%\build\ttlvpn.aar"
 set "APK=%ANDROID_DIR%\app\build\outputs\apk\debug\app-debug.apk"
+set "GRADLE_TASK=assembleDebug"
+set "BUILD_KIND=debug"
 
 set "MODE=%~1"
 if "%MODE%"=="" set "MODE=all"
@@ -26,7 +29,15 @@ if /i "%MODE%"=="--help" goto :usage
 if /i "%MODE%"=="all" goto :prereqs
 if /i "%MODE%"=="install" goto :prereqs
 if /i "%MODE%"=="app" goto :prereqs
+if /i "%MODE%"=="release" goto :release_mode
 goto :bad_args
+
+:release_mode
+set "APK=%ANDROID_DIR%\app\build\outputs\apk\release\app-release.apk"
+set "GRADLE_TASK=assembleRelease"
+set "BUILD_KIND=signed release"
+set "DIST=%ROOT%\dist"
+goto :prereqs
 
 rem ---------------------------------------------------------------- prerequisites
 :prereqs
@@ -60,6 +71,25 @@ set "MSG=ANDROID_HOME points to a missing folder: %ANDROID_HOME%"
 goto :die
 :sdk_ok
 echo    SDK       %ANDROID_HOME%
+
+if /i not "%MODE%"=="release" goto :check_ndk
+rem Only checks that signing is set up at all, so a missing setup fails before the
+rem engine build; Gradle does the full check. Values are never read or printed here:
+rem Gradle reads them itself, so no password ends up on a command line.
+if defined TTLVPN_KEYSTORE_PROPERTIES goto :signing_set
+if defined TTLVPN_KEYSTORE goto :signing_set
+set "MSG=Release signing is not configured. Set TTLVPN_KEYSTORE_PROPERTIES to a properties file outside the repo, or the TTLVPN_KEYSTORE* variables. See android\keystore.properties.example and the README, Releasing."
+goto :die
+:signing_set
+echo    signing   configured, checked by Gradle
+
+rem apksigner from the newest build-tools. The sort is alphabetical, like the NDK one.
+set "APKSIGNER="
+for /f "delims=" %%d in ('dir /b /ad /o:n "%ANDROID_HOME%\build-tools" 2^>nul') do if exist "%ANDROID_HOME%\build-tools\%%d\apksigner.bat" set "APKSIGNER=%ANDROID_HOME%\build-tools\%%d\apksigner.bat"
+if not defined APKSIGNER set "MSG=apksigner not found. Install Android SDK Build-Tools in Android Studio: SDK Manager, SDK Tools." & goto :die
+echo    apksigner %APKSIGNER%
+
+:check_ndk
 
 if /i "%MODE%"=="app" goto :check_adb
 rem gomobile reads ANDROID_NDK_HOME. Without it, take the last NDK folder by name;
@@ -134,15 +164,16 @@ echo    %AAR%
 rem ---------------------------------------------------------------- app
 :build_app
 echo.
-echo == Building the Android debug APK
+echo == Building the Android %BUILD_KIND% APK
 cd /d "%ANDROID_DIR%"
 if errorlevel 1 set "MSG=Could not enter the android folder." & goto :die
 rem "call" is required: without it, control never returns from gradlew.bat. Full path,
 rem since cmd may be set not to search the current directory for commands.
-call "%ANDROID_DIR%\gradlew.bat" assembleDebug
+call "%ANDROID_DIR%\gradlew.bat" %GRADLE_TASK%
 if errorlevel 1 set "MSG=Gradle build failed, see the output above." & goto :die
 if not exist "%APK%" set "MSG=Gradle reported success but the APK is missing: %APK%" & goto :die
 
+if /i "%MODE%"=="release" goto :verify_release
 if /i not "%MODE%"=="install" goto :done
 echo.
 echo == Installing on the phone
@@ -157,18 +188,68 @@ echo    APK: %APK%
 if /i "%MODE%"=="install" echo    Installed on the connected phone.
 exit /b 0
 
+rem ---------------------------------------------------------------- release
+:verify_release
+echo.
+echo == Verifying the signature
+rem Certificate details are public: anyone can print them from the APK with apksigner.
+set "SIGN_INFO=%ANDROID_DIR%\app\build\outputs\apk\release\apksigner-verify.txt"
+call "%APKSIGNER%" verify --verbose --print-certs "%APK%" > "%SIGN_INFO%" 2>&1
+set "VERIFY_FAILED=%ERRORLEVEL%"
+type "%SIGN_INFO%"
+if not "%VERIFY_FAILED%"=="0" set "MSG=apksigner could not verify the release APK, see above." & goto :die
+findstr /b /c:"Verifies" "%SIGN_INFO%" >nul
+if errorlevel 1 set "MSG=apksigner did not report Verifies for the release APK." & goto :die
+findstr /c:"CN=Android Debug" "%SIGN_INFO%" >nul
+if not errorlevel 1 set "MSG=The release APK is signed with the DEBUG key. Check the signing setup." & goto :die
+set "CERT_SHA="
+for /f "tokens=2 delims=:" %%c in ('findstr /c:"Signer #1 certificate SHA-256 digest:" "%SIGN_INFO%"') do set "CERT_SHA=%%c"
+if not defined CERT_SHA set "MSG=Could not read the signing certificate SHA-256 from apksigner." & goto :die
+set "CERT_SHA=%CERT_SHA: =%"
+
+rem The version comes from the line   versionName = "x.y.z"   in the app's Gradle file.
+set "VERSION="
+for /f "usebackq tokens=3" %%v in (`findstr /c:"versionName = " "%ANDROID_DIR%\app\build.gradle.kts"`) do if not defined VERSION set "VERSION=%%~v"
+if not defined VERSION set "MSG=Could not read versionName from android\app\build.gradle.kts." & goto :die
+
+if not exist "%DIST%\" mkdir "%DIST%"
+if errorlevel 1 set "MSG=Could not create the dist folder." & goto :die
+set "OUT=%DIST%\TTL-VPN-%VERSION%.apk"
+copy /y "%APK%" "%OUT%" >nul
+if errorlevel 1 set "MSG=Could not copy the APK to %OUT%" & goto :die
+
+set "APK_SHA="
+for /f "skip=1 delims=" %%h in ('certutil -hashfile "%OUT%" SHA256') do if not defined APK_SHA set "APK_SHA=%%h"
+if not defined APK_SHA set "MSG=certutil could not hash %OUT%" & goto :die
+set "APK_SHA=%APK_SHA: =%"
+
+echo.
+echo == Done: signed release %VERSION%
+echo    APK:                          %OUT%
+echo    APK SHA-256:                  %APK_SHA%
+echo    Signing certificate SHA-256:  %CERT_SHA%
+echo.
+echo    The APK SHA-256 goes in the release notes. The certificate SHA-256 is the same
+echo    for every release signed with this key: it goes in the README.
+exit /b 0
+
 rem ---------------------------------------------------------------- helpers
 :usage
-echo Usage: build.bat [install ^| app ^| help]
+echo Usage: build.bat [install ^| app ^| release ^| help]
 echo.
 echo   build.bat           Build the Go engine, then the Android debug APK
 echo   build.bat install   Same, then install it on the connected phone via adb
 echo   build.bat app       Skip the engine and reuse engine\build\ttlvpn.aar
+echo   build.bat release   Build the engine, then a signed release APK; verify it with
+echo                       apksigner, copy it to dist\ and print its SHA-256 and the
+echo                       signing certificate SHA-256
 echo   build.bat help      Show this help
 echo.
 echo Needs: Go, gomobile + gobind, JAVA_HOME pointing to a JDK, ANDROID_HOME,
 echo and the Android NDK. ANDROID_NDK_HOME is used if set. install also needs adb
 echo and exactly one connected phone, or ANDROID_SERIAL set to choose one.
+echo release also needs SDK Build-Tools and the signing setup: TTLVPN_KEYSTORE_PROPERTIES
+echo or the TTLVPN_KEYSTORE* variables, see the README section Releasing.
 exit /b 0
 
 :bad_args

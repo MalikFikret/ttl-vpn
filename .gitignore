@@ -23,9 +23,15 @@ misc.xml
 deploymentTargetDropDown.xml
 render.experimental.xml
 
-# Keystore files
+# Keystore files and signing credentials (they belong outside the repo; this is a safety net)
 *.jks
 *.keystore
+*.p12
+*.pfx
+keystore.properties
+
+# Release output from build.bat release
+/dist/
 
 # Google Services (e.g. APIs or Firebase)
 google-services.json

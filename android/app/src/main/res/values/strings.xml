@@ -2,6 +2,9 @@
     <!-- Numbers are always passed as pre-formatted strings (%s), never %d: Android would
          format them with the locale's digits (Arabic-Indic in Arabic). See Formatting.kt. -->
     <string name="app_name" translatable="false">TTL VPN</string>
+    <!-- Launcher and system label (app list, VPN dialog, notifications). The debug build
+         overrides it, tile_label and widget_label in src/debug/res to tell the two installs apart. -->
+    <string name="launcher_label" translatable="false">TTL VPN</string>
 
     <!-- Status -->
     <string name="status_disconnected">Disconnected</string>

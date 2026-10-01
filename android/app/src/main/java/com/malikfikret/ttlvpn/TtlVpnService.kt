@@ -35,8 +35,9 @@ import ttlvpn.Ttlvpn
 class TtlVpnService : VpnService() {
 
     companion object {
-        const val ACTION_START = "com.malikfikret.ttlvpn.START"
-        const val ACTION_STOP = "com.malikfikret.ttlvpn.STOP"
+        // Prefixed with the application id, so debug (.debug) and release never share an action.
+        const val ACTION_START = "${BuildConfig.APPLICATION_ID}.START"
+        const val ACTION_STOP = "${BuildConfig.APPLICATION_ID}.STOP"
 
         private const val TAG = "TtlVpnService"
         private const val CHANNEL_ID = "vpn_status"
