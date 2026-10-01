@@ -115,7 +115,11 @@ if not exist "%ENGINE%\build\" mkdir "%ENGINE%\build"
 if errorlevel 1 set "MSG=Could not create engine\build." & goto :die
 cd /d "%ENGINE%"
 if errorlevel 1 set "MSG=Could not enter the engine folder." & goto :die
-gomobile bind -target=android/arm64 -androidapi 24 -o build\ttlvpn.aar ./ttlvpn
+rem -s -w strip the ELF symbol table and DWARF debug info. Panic traces keep function
+rem names and file:line: those come from Go's own pclntab, which is not stripped.
+rem -trimpath records module-relative source paths instead of this machine's absolute
+rem ones, which would otherwise ship in the APK with the Windows user name.
+gomobile bind -target=android/arm64 -androidapi 24 -trimpath -ldflags="-s -w" -o build\ttlvpn.aar ./ttlvpn
 if errorlevel 1 set "MSG=Engine build failed, see the gomobile output above." & goto :die
 if not exist "%AAR%" set "MSG=gomobile reported success but the AAR is missing: %AAR%" & goto :die
 echo    %AAR%
